@@ -11,6 +11,7 @@
     <groupId>com.tienphat</groupId>
     <artifactId>ticketing-system</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
     <name>TicketingSystem</name>
     <description>TicketingSystem</description>
     <url/>
@@ -20,6 +21,13 @@
     <developers>
         <developer/>
     </developers>
+    <modules>
+        <module>domain</module>
+        <module>application</module>
+        <module>infrastructure</module>
+        <module>presentation</module>
+        <module>bootstrap</module>
+    </modules>
     <scm>
         <connection/>
         <developerConnection/>
@@ -28,19 +36,21 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
+        <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
     </properties>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
+<!--    <dependencies>-->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-starter</artifactId>-->
+<!--        </dependency>-->
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-starter-test</artifactId>-->
+<!--            <scope>test</scope>-->
+<!--        </dependency>-->
+<!--    </dependencies>-->
 
     <build>
         <plugins>
