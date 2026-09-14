@@ -100,6 +100,56 @@ Raw OpenAPI spec:
 http://localhost:8080/v3/api-docs
 ```
 
+## Git Workflow
+
+### Branching model
+
+This repo uses a **simplified Git Flow**: `main` (production) ← `dev` (integration) ← `feature/*`, `fix/*`.
+
+- `main` and `dev` are protected branches — all changes land via PR/MR, never pushed to directly.
+- Feature/fix branches are short-lived: delete after merge to avoid long-lived branches accumulating large conflicts.
+- Never name a branch after a person (e.g. `phat-branch`) — the name should describe the change, not the author.
+
+### Branch naming
+
+| Type          | When to use                              |
+|---------------|--------------------------------------------|
+| `feature/`    | New feature                                |
+| `fix/`        | Bug fix                                    |
+| `hotfix/`     | Urgent fix on production                   |
+| `refactor/`   | Code restructuring, no behavior change     |
+| `chore/`      | Chores (dependency bumps, config, ...)     |
+| `docs/`       | Documentation only                         |
+| `test/`       | Add/fix tests                              |
+| `release/`    | Release prep (e.g. `release/1.2.0`)        |
+
+**Description rules:**
+- Lowercase, words joined with hyphens (kebab-case): `feature/user-authentication`
+- Short but descriptive — no unclear abbreviations
+- English, to avoid encoding issues and stay tool/CI-friendly
+- If there's an issue tracker (Jira, GitHub Issues), include the ID: `feature/TICK-123-add-payment-gateway`
+
+**Examples for this project:**
+
+```
+feature/ticket-domain-model
+feature/booking-service
+fix/duplicate-ticket-booking
+refactor/clean-architecture-domain-layer
+chore/update-spring-boot-3.3
+docs/domain-design-doc
+```
+
+### Commit messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <description>`, using the same `type` values as the branch prefixes above (`feat`, `fix`, `refactor`, `chore`, `docs`, `test`).
+
+```
+fix(config): remove leading space in application.yml filename
+docs: add project README
+feat(ticket): add ticket domain model
+```
+
 ## License
 
 TBD.
