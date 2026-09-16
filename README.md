@@ -2,7 +2,7 @@
 
 A Spring Boot ticketing system built with a clean (onion) architecture, split across Maven modules so business rules stay independent of frameworks and infrastructure.
 
-> **Status:** early scaffolding. Module boundaries, build config, and datasource wiring are in place; domain/application logic has not been implemented yet.
+> **Status:** domain layer complete — pure Java 21, no Spring/JPA, 189 unit tests pass. Application, infrastructure and presentation layers are not implemented yet.
 
 ## Tech Stack
 
