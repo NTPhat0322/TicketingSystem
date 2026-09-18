@@ -12,7 +12,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A show that tickets are sold for. Aggregate root over its {@code TicketType}s.
+ * A show that tickets are sold for. An aggregate root in its own right; {@link TicketType} is a
+ * sibling aggregate, not a child held here.
  *
  * <p>Follows the entity pattern set by {@link User}: private all-args constructor (without it
  * {@code @Builder} would leave a package-private one open), private builder behind a named factory,
