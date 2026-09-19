@@ -13,4 +13,6 @@ public interface EventRepository {
     Event save(Event event);
 
     Optional<Event> findById(UUID id);
+
+    PageResult<Event> findAll(PageRequest pageRequest);
 }

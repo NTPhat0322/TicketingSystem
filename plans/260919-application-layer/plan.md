@@ -1,5 +1,5 @@
 # Plan: Application Module — Event & TicketType Use Cases (P1)
-Status: 🟡 In Progress
+Status: ✅ Complete
 Date: 2026-09-19
 Mode: Hard
 Test: --tdd
@@ -8,9 +8,9 @@ Test: --tdd
 Stand up the `application` Maven module's first slice: 10 Clean-Architecture use-case classes (Create/Update/Get/List/Deactivate for `Event` and `TicketType`) that orchestrate the already-complete `domain` aggregates and repository ports, so organizers can manage Events and TicketTypes before any Order/Payment flow exists.
 
 ## Phases
-- [ ] Phase 1: Domain foundation — `PageRequest`/`PageResult`, `EventRepository.findAll`, `EventNotFoundException`/`TicketTypeNotFoundException`, `application/pom.xml` deps, shared `UseCase<I, O>` interface
-- [ ] Phase 2: Event use-cases — Create/Update/Get/List/Deactivate, `EventResult`, `EventMapper`, and the new `Event.updateDetails(...)` domain mutator
-- [ ] Phase 3: TicketType use-cases — Create/Update/Get/ListByEvent/Deactivate, `TicketTypeResult`, `TicketTypeMapper`, and the new `TicketType.updateDetails(...)` domain mutator
+- [x] Phase 1: Domain foundation — `PageRequest`/`PageResult`, `EventRepository.findAll`, `EventNotFoundException`/`TicketTypeNotFoundException`, `application/pom.xml` deps, shared `UseCase<I, O>` interface
+- [x] Phase 2: Event use-cases — Create/Update/Get/List/Deactivate, `EventResult`, `EventMapper`, and the new `Event.updateDetails(...)` domain mutator
+- [x] Phase 3: TicketType use-cases — Create/Update/Get/ListByEvent/Deactivate, `TicketTypeResult`, `TicketTypeMapper`, and the new `TicketType.updateDetails(...)` domain mutator
 
 ## Dependency-Graph Reasoning for Phase Ordering
 - Phase 1 must land first: every later use-case implements the shared `UseCase<I, O>` interface, every write use-case needs `@Transactional` (⇒ `spring-tx` in the pom), every mapper needs MapStruct on the classpath, `ListEventsUseCase` needs `PageRequest`/`PageResult` + `EventRepository.findAll`, and every `Get*`/`Deactivate*`/`Update*` use-case needs the new not-found exceptions. None of Phase 2/3's code compiles without Phase 1.
@@ -41,3 +41,24 @@ Two HIGH findings were code-verified defects and are already fixed directly in p
 - MEDIUM: No idempotency handling on `CreateEventUseCase`/`CreateTicketTypeUseCase` — a retried/duplicated create request produces a second, distinct aggregate (new generated id), nothing de-duplicates. Acceptable for this P1 CRUD slice with no user-facing retries wired up yet; the organizer can deactivate the duplicate. Flag for presentation-layer design (idempotency key or client-side guard) in a later phase.
 - MEDIUM: Concurrent edits to the same `Event`/`TicketType` are "last write wins" until infrastructure adds optimistic locking — `Update*UseCase` does a plain `findById → mutate → save` with no version re-check. Consistent with the domain's own documented design (`TicketType.version` javadoc: "mirrors the schema's optimistic-lock column... domain code never changes it"), so not a defect in this plan; the infra-layer plan for this module must not silently drop this.
 - MEDIUM: Mutating Commands (`UpdateEventCommand`, `DeactivateEventCommand`, `UpdateTicketTypeCommand`, `DeactivateTicketTypeCommand`) carry only the resource id, no caller/organizer identity — deliberate per the spec's Out-of-Scope authorization decision, but it means presentation can't check "does this organizer own this resource" without an extra fetch-and-compare against `EventResult.organizerId`. No structural hook exists for it at the use-case layer. Not a defect in this phase (no endpoints exist yet); carried forward for the next phase's presentation/API design.
+
+## Session Notes
+<!-- Updated by cook automatically — do not edit manually -->
+
+**Last active:** 2026-09-19 15:30
+**Phase in progress:** none — all 3 phases complete, code review passed
+**Status:** Phase 1, 2, and 3 complete and verified green. Code review APPROVED (0 CRITICAL, 0 HIGH); its 1 MEDIUM + 1 LOW finding were fixed. Full suite: 208 domain tests + 32 application tests, 0 failures.
+
+### Decisions made this session
+- `PageResult.totalPages()`/`hasNext()` return `0`/`false` when `size <= 0` or `totalElements <= 0`, guarding the division rather than throwing — not specified in the plan text, chosen for symmetry since both helpers are pure computed queries with no obvious exception contract.
+- `PageRequest`/`PageResult` carry no field validation (no exception on negative `page`/`size`) — the plan's "Tests to Write First" only specifies `totalPages()`/`hasNext()` behavior, so nothing beyond that was added, per TDD scope discipline.
+- `application/pom.xml`'s compiler-plugin `annotationProcessorPaths` uses `${lombok.version}` (inherited from `spring-boot-starter-parent`'s own property, not one newly introduced) alongside the parent's existing `mapstruct.version`/`lombok-mapstruct-binding.version` properties — no new version pins.
+- **Plan correction found only at compile time:** `mapstruct`'s `componentModel = "spring"` generates a mapper impl annotated `@Component` (`org.springframework.stereotype.Component`), which lives in `spring-context`, not `spring-tx`/`spring-beans`. Added `spring-context` to `application/pom.xml` — the plan's Phase 1 dependency list ("exactly `spring-tx`, `mapstruct`, `mapstruct-processor`, Lombok, `lombok-mapstruct-binding`, and the three test-scope libraries") is now one entry short of what actually compiles; `spring-context` is a required addition, not scope creep.
+- `Event`/`TicketType` id generation for `Create*UseCase` uses `UUID.randomUUID()` (v4), not the domain's `UuidV7Generator` — that generator is deliberately package-private to `domain.model`, scoped to `Order.id` only per its own Javadoc ("exposing this would invite other layers to mint order ids of their own"). Not reopened; consistent with the existing design.
+- Phase 3's `TicketType.updateDetails(...)` was implemented and turned its 8 pre-written red tests green exactly per the red-team-corrected design: re-derives `status` from the new `totalQuantity` against the unchanged `soldQuantity` (`ACTIVE→SOLD_OUT` / `SOLD_OUT→ACTIVE`), blocks with `TicketTypeNotAvailableException` when `CLOSED`, never assigns `soldQuantity`/`version`.
+- `TicketTypeMapper` needs one hand-written `default BigDecimal map(Money price)` method alongside the generated `toResult` — MapStruct can't unwrap the `Money` VO's private constructor/`getAmount()` on its own without an explicit conversion method, same pattern anticipated in phase-03's Files section.
+- `CreateTicketTypeUseCase`'s `EventRepository.findById` pre-check is asserted read-only via `verify(eventRepository, never()).save(any())` in `CreateTicketTypeUseCaseTest`, pinning the "one aggregate save per transaction" success criterion.
+- **Code-review fixes (post-approval, both applied directly):** (1) added `EventMapperTest`/`TicketTypeMapperTest`, each instantiating the real `Mappers.getMapper(...)`-generated implementation (no mocks) and asserting every result field against the source entity — every other application test mocked the mapper interface, so the generated `toResult`/`Money→BigDecimal` conversion code itself had zero coverage until now; (2) reordered `application/pom.xml`'s `annotationProcessorPaths` to `lombok` → `lombok-mapstruct-binding` → `mapstruct-processor` (was `lombok-mapstruct-binding` → `lombok` → `mapstruct-processor`) to match the documented safe ordering, even though the old order happened to compile correctly here.
+
+### Next immediate action
+All 3 implementation phases done, code review approved and its findings fixed. Ready for Step 5 Finalize: `project-manager`, `docs-manager`, spec-coverage report, `git-manager`.

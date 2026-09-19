@@ -337,6 +337,112 @@ class TicketTypeTest {
         assertThatThrownBy(type::close).isInstanceOf(TicketTypeNotAvailableException.class);
     }
 
+    // ---- updateDetails() ----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("updateDetails() applies every field and keeps ACTIVE status when capacity is not exhausted")
+    void updateDetails_succeedsAndKeepsStatus() {
+        TicketType type = anActiveType();
+        Money newPrice = Money.of(new BigDecimal("750000"));
+
+        type.updateDetails("VVIP", newPrice, 20, 6, 900);
+
+        assertThat(type.getName()).isEqualTo("VVIP");
+        assertThat(type.getPrice()).isEqualTo(newPrice);
+        assertThat(type.getTotalQuantity()).isEqualTo(20);
+        assertThat(type.getMaxPerUser()).isEqualTo(6);
+        assertThat(type.getHoldDurationSec()).isEqualTo(900);
+        assertThat(type.getStatus()).isEqualTo(TicketTypeStatus.ACTIVE);
+        assertThat(type.getSoldQuantity()).isZero();
+        assertThat(type.getVersion()).isZero();
+        assertThat(type.getUpdatedAt()).isAfterOrEqualTo(type.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("updateDetails() rejects a non-positive totalQuantity, maxPerUser or holdDurationSec")
+    void updateDetails_throwsOnNonPositiveFields() {
+        TicketType type = anActiveType();
+
+        assertThatThrownBy(() -> type.updateDetails("VIP", PRICE, 0, 4, 600))
+                .isInstanceOf(InvalidTicketTypeDataException.class)
+                .hasMessageContaining("totalQuantity");
+        assertThatThrownBy(() -> type.updateDetails("VIP", PRICE, TOTAL, 0, 600))
+                .isInstanceOf(InvalidTicketTypeDataException.class)
+                .hasMessageContaining("maxPerUser");
+        assertThatThrownBy(() -> type.updateDetails("VIP", PRICE, TOTAL, 4, 0))
+                .isInstanceOf(InvalidTicketTypeDataException.class)
+                .hasMessageContaining("holdDurationSec");
+    }
+
+    @Test
+    @DisplayName("updateDetails() rejects a blank name and a null price")
+    void updateDetails_throwsOnMissingRequiredFields() {
+        TicketType type = anActiveType();
+
+        assertThatThrownBy(() -> type.updateDetails(" ", PRICE, TOTAL, 4, 600))
+                .isInstanceOf(InvalidTicketTypeDataException.class)
+                .hasMessageContaining("name");
+        assertThatThrownBy(() -> type.updateDetails("VIP", null, TOTAL, 4, 600))
+                .isInstanceOf(InvalidTicketTypeDataException.class)
+                .hasMessageContaining("price");
+    }
+
+    @Test
+    @DisplayName("updateDetails() rejects a totalQuantity below soldQuantity")
+    void updateDetails_throwsWhenTotalQuantityBelowSoldQuantity() {
+        TicketType type = anActiveType();
+        type.confirmSale(5);
+
+        assertThatThrownBy(() -> type.updateDetails("VIP", PRICE, 4, 4, 600))
+                .isInstanceOf(InvalidTicketTypeDataException.class)
+                .hasMessageContaining("totalQuantity");
+        assertThat(type.getSoldQuantity()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("updateDetails() throws TicketTypeNotAvailableException when CLOSED")
+    void updateDetails_throwsWhenClosed() {
+        TicketType type = aClosedType();
+
+        assertThatThrownBy(() -> type.updateDetails("VVIP", PRICE, TOTAL, 4, 600))
+                .isInstanceOf(TicketTypeNotAvailableException.class);
+        assertThat(type.getName()).isEqualTo("VIP");
+    }
+
+    @Test
+    @DisplayName("updateDetails() transitions ACTIVE to SOLD_OUT when the new totalQuantity matches soldQuantity")
+    void updateDetails_transitionsActiveToSoldOut() {
+        TicketType type = anActiveType();
+        type.confirmSale(4);
+
+        type.updateDetails("VIP", PRICE, 4, 4, 600);
+
+        assertThat(type.getStatus()).isEqualTo(TicketTypeStatus.SOLD_OUT);
+        assertThat(type.getSoldQuantity()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("updateDetails() transitions SOLD_OUT back to ACTIVE when the new totalQuantity exceeds soldQuantity")
+    void updateDetails_transitionsSoldOutToActive() {
+        TicketType type = aSoldOutType();
+
+        type.updateDetails("VIP", PRICE, TOTAL + 5, 4, 600);
+
+        assertThat(type.getStatus()).isEqualTo(TicketTypeStatus.ACTIVE);
+        assertThat(type.getSoldQuantity()).isEqualTo(TOTAL);
+    }
+
+    @Test
+    @DisplayName("updateDetails() never changes soldQuantity or version")
+    void updateDetails_neverChangesSoldQuantityOrVersion() {
+        TicketType type = aDivergentSoldOutType(150, 100);
+
+        type.updateDetails("VIP", PRICE, 200, 4, 600);
+
+        assertThat(type.getSoldQuantity()).isEqualTo(100);
+        assertThat(type.getVersion()).isEqualTo(3);
+    }
+
     // ---- reconstitute() ----------------------------------------------------------------------
 
     private static final Instant STORED_CREATED_AT = Instant.parse("2026-07-01T09:00:00Z");
