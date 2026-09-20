@@ -142,6 +142,52 @@ public class TicketType {
     }
 
     /**
+     * Applies new field values. Never assigns {@code soldQuantity} or {@code version} — but does
+     * re-derive {@code status} from the new {@code totalQuantity} against the unchanged
+     * {@code soldQuantity}, the same {@code SOLD_OUT ⟺ soldQuantity == totalQuantity} invariant
+     * {@link #confirmSale}/{@link #releaseSale} maintain: {@code ACTIVE → SOLD_OUT} when the new
+     * {@code totalQuantity} equals {@code soldQuantity}, {@code SOLD_OUT → ACTIVE} when it now
+     * exceeds it.
+     *
+     * @throws TicketTypeNotAvailableException if the type is {@code CLOSED} — editing a tier the
+     *                                          organizer already stopped selling has no defined meaning
+     * @throws InvalidTicketTypeDataException  on a blank name, null price, non-positive quantity/limit,
+     *                                          or a {@code totalQuantity} below the current {@code soldQuantity}
+     */
+    public void updateDetails(String name, Money price, int totalQuantity, int maxPerUser, int holdDurationSec) {
+        if (status == TicketTypeStatus.CLOSED) {
+            throw new TicketTypeNotAvailableException("TicketType " + id + " is CLOSED");
+        }
+        if (name == null || name.isBlank()) {
+            throw new InvalidTicketTypeDataException("TicketType name must not be blank");
+        }
+        if (price == null) {
+            throw new InvalidTicketTypeDataException("TicketType price must not be null");
+        }
+        requirePositive(totalQuantity, "totalQuantity");
+        requirePositive(maxPerUser, "maxPerUser");
+        requirePositive(holdDurationSec, "holdDurationSec");
+        if (totalQuantity < soldQuantity) {
+            throw new InvalidTicketTypeDataException(
+                    "TicketType totalQuantity must not be below soldQuantity " + soldQuantity
+                            + ", but was " + totalQuantity);
+        }
+
+        if (totalQuantity == soldQuantity && status != TicketTypeStatus.SOLD_OUT) {
+            transitionTo(TicketTypeStatus.SOLD_OUT);
+        } else if (totalQuantity > soldQuantity && status == TicketTypeStatus.SOLD_OUT) {
+            transitionTo(TicketTypeStatus.ACTIVE);
+        }
+
+        this.name = name;
+        this.price = price;
+        this.totalQuantity = totalQuantity;
+        this.maxPerUser = maxPerUser;
+        this.holdDurationSec = holdDurationSec;
+        touch();
+    }
+
+    /**
      * Records {@code qty} tickets as paid for. The only method that increments
      * {@code soldQuantity}; intended caller is {@code ConfirmPaymentUseCase} on payment success.
      *

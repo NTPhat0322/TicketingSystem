@@ -143,6 +143,43 @@ public class Event {
                 .build();
     }
 
+    /**
+     * Applies new field values while still {@link EventStatus#DRAFT}. Runs the exact same field
+     * and schedule validation as {@link #create}; once an event has left {@code DRAFT} no field is
+     * editable.
+     */
+    public void updateDetails(String name, String description, String venueName,
+                              Instant startTime, Instant endTime,
+                              Instant saleStartTime, Instant saleEndTime) {
+        if (status != EventStatus.DRAFT) {
+            throw new InvalidEventStateException(
+                    "Event details can only be updated while DRAFT, was " + status);
+        }
+
+        requireNotBlank(name, "name");
+        requireNotBlank(venueName, "venueName");
+        requireNotNull(startTime, "startTime");
+        requireNotNull(endTime, "endTime");
+        requireNotNull(saleStartTime, "saleStartTime");
+        requireNotNull(saleEndTime, "saleEndTime");
+
+        if (!startTime.isBefore(endTime)) {
+            throw new InvalidEventScheduleException("Event startTime must be before endTime");
+        }
+        if (!saleStartTime.isBefore(saleEndTime)) {
+            throw new InvalidEventScheduleException("Event saleStartTime must be before saleEndTime");
+        }
+
+        this.name = name;
+        this.description = description;
+        this.venueName = venueName;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.saleStartTime = saleStartTime;
+        this.saleEndTime = saleEndTime;
+        this.updatedAt = Instant.now();
+    }
+
     /** {@code DRAFT → PUBLISHED}. The event becomes visible; tickets are not on sale yet. */
     public void publish() {
         transitionTo(EventStatus.PUBLISHED);

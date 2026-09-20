@@ -245,6 +245,77 @@ class EventTest {
     }
 
     @Test
+    @DisplayName("updateDetails() applies every field from DRAFT and bumps updatedAt")
+    void updateDetails_succeedsFromDraft() {
+        Event event = aDraft();
+        Instant newStart = START.plus(1, ChronoUnit.DAYS);
+        Instant newEnd = newStart.plus(3, ChronoUnit.HOURS);
+        Instant newSaleStart = SALE_START.plus(1, ChronoUnit.DAYS);
+        Instant newSaleEnd = newSaleStart.plus(7, ChronoUnit.DAYS);
+
+        event.updateDetails("New name", "New description", "New Venue",
+                newStart, newEnd, newSaleStart, newSaleEnd);
+
+        assertThat(event.getName()).isEqualTo("New name");
+        assertThat(event.getDescription()).isEqualTo("New description");
+        assertThat(event.getVenueName()).isEqualTo("New Venue");
+        assertThat(event.getStartTime()).isEqualTo(newStart);
+        assertThat(event.getEndTime()).isEqualTo(newEnd);
+        assertThat(event.getSaleStartTime()).isEqualTo(newSaleStart);
+        assertThat(event.getSaleEndTime()).isEqualTo(newSaleEnd);
+        assertThat(event.getStatus()).isEqualTo(EventStatus.DRAFT);
+        assertThat(event.getUpdatedAt()).isAfterOrEqualTo(event.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("updateDetails() throws from every non-DRAFT status and leaves the entity unchanged")
+    void updateDetails_throwsFromEveryNonDraftStatus() {
+        for (EventStatus status : EnumSet.complementOf(EnumSet.of(EventStatus.DRAFT))) {
+            Event event = anEventIn(status);
+
+            assertThatThrownBy(() -> event.updateDetails("New name", "New description", "New Venue",
+                    START, END, SALE_START, SALE_END))
+                    .as("updateDetails from %s", status)
+                    .isInstanceOf(InvalidEventStateException.class);
+
+            assertThat(event.getName()).as("%s is unchanged", status).isEqualTo("Concert");
+        }
+    }
+
+    @Test
+    @DisplayName("updateDetails() rejects a blank name")
+    void updateDetails_throwsOnBlankName() {
+        Event event = aDraft();
+
+        assertThatThrownBy(() -> event.updateDetails(" ", "New description", "New Venue",
+                START, END, SALE_START, SALE_END))
+                .isInstanceOf(InvalidEventDataException.class)
+                .hasMessageContaining("name");
+    }
+
+    @Test
+    @DisplayName("updateDetails() rejects an inverted event window")
+    void updateDetails_throwsOnInvertedEventWindow() {
+        Event event = aDraft();
+
+        assertThatThrownBy(() -> event.updateDetails("New name", "New description", "New Venue",
+                END, START, SALE_START, SALE_END))
+                .isInstanceOf(InvalidEventScheduleException.class)
+                .hasMessageContaining("startTime");
+    }
+
+    @Test
+    @DisplayName("updateDetails() rejects an inverted sale window")
+    void updateDetails_throwsOnInvertedSaleWindow() {
+        Event event = aDraft();
+
+        assertThatThrownBy(() -> event.updateDetails("New name", "New description", "New Venue",
+                START, END, SALE_END, SALE_START))
+                .isInstanceOf(InvalidEventScheduleException.class)
+                .hasMessageContaining("saleStartTime");
+    }
+
+    @Test
     @DisplayName("equality is by id alone")
     void equality_isIdentityBased() {
         Event one = Event.create(ID, ORGANIZER_ID, "A", null, "V1", START, END, SALE_START, SALE_END);
