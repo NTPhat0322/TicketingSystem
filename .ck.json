@@ -1,4 +1,7 @@
 {
+  "privacyBlock": {
+    "allowList": [".env.example"]
+  },
   "simplify": {
     "threshold": {
       "totalLoc": 400,

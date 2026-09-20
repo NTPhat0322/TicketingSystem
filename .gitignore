@@ -34,3 +34,6 @@ build/
 
 # agent
 .claude/
+
+# docker
+.env
