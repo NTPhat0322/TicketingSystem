@@ -6,4 +6,9 @@ public class TicketTypeNotFoundException extends DomainException {
     public TicketTypeNotFoundException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.NOT_FOUND;
+    }
 }

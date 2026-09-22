@@ -6,4 +6,9 @@ public class InvalidTicketTypeDataException extends DomainException {
     public InvalidTicketTypeDataException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.VALIDATION;
+    }
 }

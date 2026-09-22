@@ -6,4 +6,9 @@ public class EventNotFoundException extends DomainException {
     public EventNotFoundException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.NOT_FOUND;
+    }
 }
