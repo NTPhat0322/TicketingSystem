@@ -6,4 +6,9 @@ public class TicketTypeConcurrentUpdateException extends DomainException {
     public TicketTypeConcurrentUpdateException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.CONFLICT;
+    }
 }

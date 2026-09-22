@@ -6,4 +6,9 @@ public class TicketTypeNotAvailableException extends DomainException {
     public TicketTypeNotAvailableException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.CONFLICT;
+    }
 }

@@ -6,4 +6,9 @@ public class InvalidEventScheduleException extends DomainException {
     public InvalidEventScheduleException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.VALIDATION;
+    }
 }

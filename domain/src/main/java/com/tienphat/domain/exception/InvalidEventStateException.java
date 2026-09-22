@@ -6,4 +6,9 @@ public class InvalidEventStateException extends DomainException {
     public InvalidEventStateException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.VALIDATION;
+    }
 }

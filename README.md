@@ -2,7 +2,7 @@
 
 A Spring Boot ticketing system built with a clean (onion) architecture, split across Maven modules so business rules stay independent of frameworks and infrastructure.
 
-> **Status:** domain layer complete (208 unit tests); application layer P1 complete (Event & TicketType CRUD use-cases, 32 tests); infrastructure layer P1 complete (Event & TicketType JPA persistence, 15 integration tests). Presentation layer not yet implemented.
+> **Status:** domain layer complete (208 unit tests); application layer P1 complete (Event & TicketType CRUD use-cases, 32 tests); infrastructure layer P1 complete (Event & TicketType JPA persistence, 15 integration tests); **presentation layer complete** (10 REST endpoints across Event/TicketType, MapStruct DTOs, RFC 7807 exception handling, 55 tests in presentation/bootstrap). Full reactor: 310/310 tests passing.
 
 ## Tech Stack
 

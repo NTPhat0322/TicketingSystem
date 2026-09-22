@@ -6,4 +6,9 @@ public class InvalidEventDataException extends DomainException {
     public InvalidEventDataException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.VALIDATION;
+    }
 }
