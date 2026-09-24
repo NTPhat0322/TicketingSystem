@@ -1,5 +1,6 @@
 package com.tienphat.infrastructure.event;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.CreateEventUseCase;
 import com.tienphat.application.event.DeactivateEventCommand;
@@ -11,6 +12,7 @@ import com.tienphat.application.event.ListEventsUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.event.UpdateEventUseCase;
 import com.tienphat.domain.model.EventStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.domain.repository.PageRequest;
 import com.tienphat.domain.repository.PageResult;
 import com.tienphat.infrastructure.AbstractPostgresIntegrationTest;
@@ -29,6 +31,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(classes = InfrastructureTestApplication.class)
 class EventUseCaseIntegrationTest extends AbstractPostgresIntegrationTest {
+
+    private static final UUID ORGANIZER_ID = UUID.randomUUID();
+    private static final AuthorizationContext ORGANIZER =
+            new AuthorizationContext(ORGANIZER_ID, UserRole.ORGANIZER);
 
     @Autowired
     private EventRepositoryImpl eventRepository;
@@ -58,7 +64,7 @@ class EventUseCaseIntegrationTest extends AbstractPostgresIntegrationTest {
         Instant end = start.plus(3, ChronoUnit.HOURS);
 
         EventResult created = createEventUseCase.execute(new CreateEventCommand(
-                UUID.randomUUID(), "Concert", "desc", "Venue", start, end, saleStart, saleEnd));
+                ORGANIZER, "Concert", "desc", "Venue", start, end, saleStart, saleEnd));
         assertThat(created.status()).isEqualTo(EventStatus.DRAFT);
 
         EventResult fetched = getEventUseCase.execute(created.id());
@@ -67,13 +73,15 @@ class EventUseCaseIntegrationTest extends AbstractPostgresIntegrationTest {
         Instant newStart = start.plus(1, ChronoUnit.DAYS);
         Instant newEnd = newStart.plus(3, ChronoUnit.HOURS);
         EventResult updated = updateEventUseCase.execute(new UpdateEventCommand(
-                created.id(), "Concert Updated", "desc2", "Venue2", newStart, newEnd, saleStart, saleEnd));
+                created.id(), ORGANIZER, "Concert Updated", "desc2", "Venue2", newStart, newEnd,
+                saleStart, saleEnd));
         assertThat(updated.name()).isEqualTo("Concert Updated");
 
         PageResult<EventResult> page = listEventsUseCase.execute(new PageRequest(0, 10));
         assertThat(page.content()).extracting(EventResult::id).contains(created.id());
 
-        EventResult deactivated = deactivateEventUseCase.execute(new DeactivateEventCommand(created.id()));
+        EventResult deactivated = deactivateEventUseCase.execute(
+                new DeactivateEventCommand(created.id(), ORGANIZER));
         assertThat(deactivated.status()).isEqualTo(EventStatus.CANCELLED);
     }
 }

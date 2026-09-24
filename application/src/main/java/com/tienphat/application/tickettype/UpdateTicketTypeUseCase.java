@@ -1,8 +1,10 @@
 package com.tienphat.application.tickettype;
 
 import com.tienphat.application.usecase.UseCase;
+import com.tienphat.domain.exception.EventNotFoundException;
 import com.tienphat.domain.exception.TicketTypeNotFoundException;
 import com.tienphat.domain.model.TicketType;
+import com.tienphat.domain.repository.EventRepository;
 import com.tienphat.domain.repository.TicketTypeRepository;
 import com.tienphat.domain.vo.Money;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,10 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class UpdateTicketTypeUseCase implements UseCase<UpdateTicketTypeCommand, TicketTypeResult> {
 
     private final TicketTypeRepository ticketTypeRepository;
+    private final EventRepository eventRepository;
     private final TicketTypeMapper ticketTypeMapper;
 
-    public UpdateTicketTypeUseCase(TicketTypeRepository ticketTypeRepository, TicketTypeMapper ticketTypeMapper) {
+    public UpdateTicketTypeUseCase(TicketTypeRepository ticketTypeRepository, EventRepository eventRepository,
+                                   TicketTypeMapper ticketTypeMapper) {
         this.ticketTypeRepository = ticketTypeRepository;
+        this.eventRepository = eventRepository;
         this.ticketTypeMapper = ticketTypeMapper;
     }
 
@@ -22,6 +27,9 @@ public class UpdateTicketTypeUseCase implements UseCase<UpdateTicketTypeCommand,
     public TicketTypeResult execute(UpdateTicketTypeCommand command) {
         TicketType ticketType = ticketTypeRepository.findById(command.id())
                 .orElseThrow(() -> new TicketTypeNotFoundException("TicketType " + command.id() + " not found"));
+        var event = eventRepository.findById(ticketType.getEventId())
+                .orElseThrow(() -> new EventNotFoundException("Event " + ticketType.getEventId() + " not found"));
+        command.actor().requireCanManage(event.getOrganizerId());
 
         Money price = Money.of(command.price());
         ticketType.updateDetails(command.name(), price, command.totalQuantity(),

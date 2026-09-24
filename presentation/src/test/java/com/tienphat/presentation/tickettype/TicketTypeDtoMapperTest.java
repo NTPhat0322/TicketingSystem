@@ -1,9 +1,11 @@
 package com.tienphat.presentation.tickettype;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.application.tickettype.CreateTicketTypeCommand;
 import com.tienphat.application.tickettype.TicketTypeResult;
 import com.tienphat.application.tickettype.UpdateTicketTypeCommand;
 import com.tienphat.domain.model.TicketTypeStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.presentation.tickettype.dto.CreateTicketTypeRequest;
 import com.tienphat.presentation.tickettype.dto.TicketTypeResponse;
 import com.tienphat.presentation.tickettype.dto.UpdateTicketTypeRequest;
@@ -22,15 +24,17 @@ class TicketTypeDtoMapperTest {
     private final TicketTypeDtoMapper mapper = Mappers.getMapper(TicketTypeDtoMapper.class);
 
     @Test
-    @DisplayName("toCommand(CreateTicketTypeRequest) preserves every field")
+    @DisplayName("toCommand(CreateTicketTypeRequest, actor) preserves every field and actor")
     void toCommand_fromCreateRequest_preservesEveryField() {
         UUID eventId = UUID.randomUUID();
         CreateTicketTypeRequest request = new CreateTicketTypeRequest(
                 eventId, "VIP", BigDecimal.valueOf(150), 100, 4, 900);
+        AuthorizationContext actor = new AuthorizationContext(UUID.randomUUID(), UserRole.ORGANIZER);
 
-        CreateTicketTypeCommand command = mapper.toCommand(request);
+        CreateTicketTypeCommand command = mapper.toCommand(request, actor);
 
         assertThat(command.eventId()).isEqualTo(eventId);
+        assertThat(command.actor()).isEqualTo(actor);
         assertThat(command.name()).isEqualTo("VIP");
         assertThat(command.price()).isEqualByComparingTo(BigDecimal.valueOf(150));
         assertThat(command.totalQuantity()).isEqualTo(100);
@@ -39,15 +43,17 @@ class TicketTypeDtoMapperTest {
     }
 
     @Test
-    @DisplayName("toCommand(id, UpdateTicketTypeRequest) preserves the path id plus every body field")
+    @DisplayName("toCommand(id, UpdateTicketTypeRequest, actor) preserves the path id plus every body field")
     void toCommand_fromUpdateRequest_preservesPathIdAndEveryField() {
         UUID id = UUID.randomUUID();
         UpdateTicketTypeRequest request = new UpdateTicketTypeRequest(
                 "VIP v2", BigDecimal.valueOf(200), 120, 6, 600);
 
-        UpdateTicketTypeCommand command = mapper.toCommand(id, request);
+        AuthorizationContext actor = new AuthorizationContext(UUID.randomUUID(), UserRole.ORGANIZER);
+        UpdateTicketTypeCommand command = mapper.toCommand(id, request, actor);
 
         assertThat(command.id()).isEqualTo(id);
+        assertThat(command.actor()).isEqualTo(actor);
         assertThat(command.name()).isEqualTo("VIP v2");
         assertThat(command.price()).isEqualByComparingTo(BigDecimal.valueOf(200));
         assertThat(command.totalQuantity()).isEqualTo(120);

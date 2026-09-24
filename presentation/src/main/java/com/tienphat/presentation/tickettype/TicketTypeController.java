@@ -6,11 +6,17 @@ import com.tienphat.application.tickettype.DeactivateTicketTypeCommand;
 import com.tienphat.application.tickettype.TicketTypeResult;
 import com.tienphat.application.tickettype.UpdateTicketTypeCommand;
 import com.tienphat.application.usecase.UseCase;
+import com.tienphat.presentation.auth.JwtAuthorizationContext;
+import com.tienphat.presentation.config.OpenApiConfig;
 import com.tienphat.presentation.tickettype.dto.CreateTicketTypeRequest;
 import com.tienphat.presentation.tickettype.dto.TicketTypeResponse;
 import com.tienphat.presentation.tickettype.dto.UpdateTicketTypeRequest;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,9 +60,13 @@ public class TicketTypeController {
     }
 
     @PostMapping(BASE_PATH)
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
     @ResponseStatus(HttpStatus.CREATED)
-    public TicketTypeResponse create(@Valid @RequestBody CreateTicketTypeRequest request) {
-        TicketTypeResult result = createTicketTypeUseCase.execute(mapper.toCommand(request));
+    public TicketTypeResponse create(@Valid @RequestBody CreateTicketTypeRequest request,
+                                     @AuthenticationPrincipal Jwt jwt) {
+        TicketTypeResult result = createTicketTypeUseCase.execute(
+                mapper.toCommand(request, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 
@@ -67,14 +77,21 @@ public class TicketTypeController {
     }
 
     @PutMapping(BASE_PATH + "/{id}")
-    public TicketTypeResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateTicketTypeRequest request) {
-        TicketTypeResult result = updateTicketTypeUseCase.execute(mapper.toCommand(id, request));
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    public TicketTypeResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateTicketTypeRequest request,
+                                     @AuthenticationPrincipal Jwt jwt) {
+        TicketTypeResult result = updateTicketTypeUseCase.execute(
+                mapper.toCommand(id, request, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 
     @PostMapping(BASE_PATH + "/{id}/deactivate")
-    public TicketTypeResponse deactivate(@PathVariable UUID id) {
-        TicketTypeResult result = deactivateTicketTypeUseCase.execute(new DeactivateTicketTypeCommand(id));
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    public TicketTypeResponse deactivate(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        TicketTypeResult result = deactivateTicketTypeUseCase.execute(
+                new DeactivateTicketTypeCommand(id, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 

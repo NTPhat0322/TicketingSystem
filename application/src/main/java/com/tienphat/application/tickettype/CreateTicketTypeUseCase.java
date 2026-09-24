@@ -26,8 +26,9 @@ public class CreateTicketTypeUseCase implements UseCase<CreateTicketTypeCommand,
 
     @Override
     public TicketTypeResult execute(CreateTicketTypeCommand command) {
-        eventRepository.findById(command.eventId())
+        var event = eventRepository.findById(command.eventId())
                 .orElseThrow(() -> new EventNotFoundException("Event " + command.eventId() + " not found"));
+        command.actor().requireCanManage(event.getOrganizerId());
 
         Money price = Money.of(command.price());
         TicketType ticketType = TicketType.create(UUID.randomUUID(), command.eventId(), command.name(), price,

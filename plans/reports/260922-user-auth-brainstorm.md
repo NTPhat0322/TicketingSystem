@@ -1,0 +1,23 @@
+# Brainstorm: User aggregate — authentication & authorization (Spring Security)
+
+**Date:** 2026-09-22
+
+## Ideas Explored
+- **Auth style**: JWT stateless vs. session-based (cookie). Session-based dismissed — flash-sale system likely serves a separate SPA/mobile client, and stateless JWT avoids needing a shared session store to scale horizontally.
+- **Role provisioning**: self-registration with role picker vs. CUSTOMER-only public registration + ADMIN-gated promotion. The former lets anyone mint an ORGANIZER account through the public API, which is a privilege-escalation risk with no real benefit; rejected.
+- **Refresh token persistence**: stateless-only access token (no refresh) vs. DB-backed revocable refresh token. Stateless-only is simpler but can't be revoked on logout/compromise; DB-backed wins for a system that will eventually need "log out this device."
+- **RefreshToken's architectural home**: domain aggregate (repository port in `domain`, matching `User`/`Order`) vs. infra-only JPA entity with no domain port. Domain aggregate keeps pattern consistency but pulls a pure security-plumbing concept into the business layer that the rest of `domain/` deliberately keeps free of infrastructure concerns (mirrors the `business_rule.md` BR-05 reasoning for why outbox is scoped to Order/Payment only, not everything that touches persistence).
+- **JWT library**: Spring Security's built-in Nimbus JWT support (`spring-security-oauth2-jose`, `JwtEncoder`/`JwtDecoder`) vs. `io.jsonwebtoken` (jjwt). jjwt is simpler to hand-roll a filter around but sits outside the Spring Security ecosystem the rest of this plan leans on; Nimbus integrates directly with `SecurityContext` population.
+- **Scope creep candidate**: retrofitting `@PreAuthorize` role checks onto the already-shipped Event/TicketType endpoints (currently `permitAll`). Considered and explicitly deferred — doing it now would require deciding Event ownership (`organizerId`?) which is a domain change, not an auth-infra change.
+- **P2 candidates surfaced but deferred**: forgot-password/reset-via-email, login rate-limiting/lockout, email verification on registration. All three require infrastructure (SMTP, attempt counters) that doesn't exist yet and aren't needed for the P1 goal of "requests can be authenticated and role-checked."
+
+## User's Direction
+Spring Security, JWT stateless. Public registration is CUSTOMER-only; only an ADMIN can create/promote ORGANIZER or ADMIN accounts (reuses the existing `User.changeRole()` domain method — no new domain code needed there). Refresh tokens are real and DB-backed so logout/revocation is possible, but the RefreshToken itself is infra-only plumbing, not a domain aggregate. JWT signing goes through Spring Security's own Nimbus encoder/decoder rather than adding jjwt as a new dependency. Access token TTL 15 minutes, refresh token TTL 7 days. This plan stops at building the User module (register/login/refresh/logout/role-promotion) — it does **not** touch the existing Event/TicketType controllers' `permitAll` configuration.
+
+## Open Questions
+None blocking — all raised ambiguities were resolved in this session (see decisions above). One judgment call carried into the spec as an **Assumption** rather than a `[NEEDS CLARIFICATION]`: refresh token rotation is single-chain (each refresh immediately revokes the presented token and issues one new one), not a multi-device-concurrent-refresh model — sufficient for P1, revisit if the product needs "stay logged in on 3 devices at once" semantics later.
+
+## Risks
+- **MEDIUM** — Storing refresh tokens hashed (not raw) in Postgres is a stated requirement, not yet enforced by any test until `/ck:plan` turns it into a phase; a careless implementation could persist the raw token string. Flag for the planner to make this an explicit success criterion with a `grep`-able check, mirroring how the domain-layer plan verified "no `@Setter`" mechanically rather than trusting review alone.
+- **MEDIUM** — JWT secret key management: for local/dev this is an env var (like the existing `.env`-sourced DB credentials), but nothing in this plan defines what happens in a real deployment (key rotation, `.env` in git). Out of scope for this plan's P1, but should be named as a known gap rather than silently assumed away.
+- **LOW** — `spring-boot-starter-oauth2-resource-server` + `spring-security-oauth2-jose` are new dependencies for the `presentation` (or a new `application`-adjacent) module; need to confirm they resolve cleanly against the project's Spring Boot 4.1.1 / Spring Framework 7 versions already pinned elsewhere in the reactor before committing to them in the plan.

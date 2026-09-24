@@ -1,5 +1,6 @@
 package com.tienphat.presentation.tickettype;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.application.tickettype.CreateTicketTypeCommand;
 import com.tienphat.application.tickettype.TicketTypeResult;
 import com.tienphat.application.tickettype.UpdateTicketTypeCommand;
@@ -14,10 +15,12 @@ import java.util.UUID;
 @Mapper(componentModel = "spring")
 public interface TicketTypeDtoMapper {
 
-    CreateTicketTypeCommand toCommand(CreateTicketTypeRequest request);
+    @Mapping(target = "actor", source = "actor")
+    CreateTicketTypeCommand toCommand(CreateTicketTypeRequest request, AuthorizationContext actor);
 
     @Mapping(target = "id", source = "id")
-    UpdateTicketTypeCommand toCommand(UUID id, UpdateTicketTypeRequest request);
+    @Mapping(target = "actor", source = "actor")
+    UpdateTicketTypeCommand toCommand(UUID id, UpdateTicketTypeRequest request, AuthorizationContext actor);
 
     TicketTypeResponse toResponse(TicketTypeResult result);
 }

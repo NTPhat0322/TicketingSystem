@@ -20,7 +20,8 @@ public class CreateEventUseCase implements UseCase<CreateEventCommand, EventResu
 
     @Override
     public EventResult execute(CreateEventCommand command) {
-        Event event = Event.create(UUID.randomUUID(), command.organizerId(), command.name(),
+        command.actor().requireCanCreate();
+        Event event = Event.create(UUID.randomUUID(), command.actor().userId(), command.name(),
                 command.description(), command.venueName(), command.startTime(), command.endTime(),
                 command.saleStartTime(), command.saleEndTime());
 

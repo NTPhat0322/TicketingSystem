@@ -5,6 +5,8 @@ import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.usecase.UseCase;
+import com.tienphat.presentation.auth.JwtAuthorizationContext;
+import com.tienphat.presentation.config.OpenApiConfig;
 import com.tienphat.domain.repository.PageRequest;
 import com.tienphat.domain.repository.PageResult;
 import com.tienphat.presentation.dto.PageResponse;
@@ -14,7 +16,11 @@ import com.tienphat.presentation.event.dto.UpdateEventRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,9 +62,13 @@ public class EventController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
     @ResponseStatus(HttpStatus.CREATED)
-    public EventResponse create(@Valid @RequestBody CreateEventRequest request) {
-        EventResult result = createEventUseCase.execute(mapper.toCommand(request));
+    public EventResponse create(@Valid @RequestBody CreateEventRequest request,
+                                @AuthenticationPrincipal Jwt jwt) {
+        EventResult result = createEventUseCase.execute(
+                mapper.toCommand(request, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 
@@ -77,14 +87,21 @@ public class EventController {
     }
 
     @PutMapping("/{id}")
-    public EventResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateEventRequest request) {
-        EventResult result = updateEventUseCase.execute(mapper.toCommand(id, request));
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    public EventResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateEventRequest request,
+                                @AuthenticationPrincipal Jwt jwt) {
+        EventResult result = updateEventUseCase.execute(
+                mapper.toCommand(id, request, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 
     @PostMapping("/{id}/deactivate")
-    public EventResponse deactivate(@PathVariable UUID id) {
-        EventResult result = deactivateEventUseCase.execute(new DeactivateEventCommand(id));
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    public EventResponse deactivate(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        EventResult result = deactivateEventUseCase.execute(
+                new DeactivateEventCommand(id, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 }

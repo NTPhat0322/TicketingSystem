@@ -22,6 +22,7 @@ public class UpdateEventUseCase implements UseCase<UpdateEventCommand, EventResu
         Event event = eventRepository.findById(command.id())
                 .orElseThrow(() -> new EventNotFoundException("Event " + command.id() + " not found"));
 
+        command.actor().requireCanManage(event.getOrganizerId());
         event.updateDetails(command.name(), command.description(), command.venueName(),
                 command.startTime(), command.endTime(), command.saleStartTime(), command.saleEndTime());
 

@@ -1,9 +1,11 @@
 package com.tienphat.application.event;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.domain.exception.EventNotFoundException;
 import com.tienphat.domain.exception.InvalidEventStateException;
 import com.tienphat.domain.model.Event;
 import com.tienphat.domain.model.EventStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.domain.repository.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +26,8 @@ class DeactivateEventUseCaseTest {
 
     private static final UUID ID = UUID.randomUUID();
     private static final UUID ORGANIZER_ID = UUID.randomUUID();
+    private static final AuthorizationContext ORGANIZER =
+            new AuthorizationContext(ORGANIZER_ID, UserRole.ORGANIZER);
     private static final Instant SALE_START = Instant.now().plus(1, ChronoUnit.DAYS);
     private static final Instant SALE_END = SALE_START.plus(7, ChronoUnit.DAYS);
     private static final Instant START = SALE_END.plus(1, ChronoUnit.DAYS);
@@ -53,7 +57,7 @@ class DeactivateEventUseCaseTest {
                 START, END, SALE_START, SALE_END, EventStatus.CANCELLED, Instant.now(), Instant.now());
         when(eventMapper.toResult(any(Event.class))).thenReturn(expected);
 
-        EventResult result = useCase.execute(new DeactivateEventCommand(ID));
+        EventResult result = useCase.execute(new DeactivateEventCommand(ID, ORGANIZER));
 
         assertThat(event.getStatus()).isEqualTo(EventStatus.CANCELLED);
         assertThat(result).isEqualTo(expected);
@@ -64,7 +68,7 @@ class DeactivateEventUseCaseTest {
     void execute_throwsWhenNotFound() {
         when(eventRepository.findById(ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.execute(new DeactivateEventCommand(ID)))
+        assertThatThrownBy(() -> useCase.execute(new DeactivateEventCommand(ID, ORGANIZER)))
                 .isInstanceOf(EventNotFoundException.class);
     }
 
@@ -77,7 +81,7 @@ class DeactivateEventUseCaseTest {
         event.close();
         when(eventRepository.findById(ID)).thenReturn(Optional.of(event));
 
-        assertThatThrownBy(() -> useCase.execute(new DeactivateEventCommand(ID)))
+        assertThatThrownBy(() -> useCase.execute(new DeactivateEventCommand(ID, ORGANIZER)))
                 .isInstanceOf(InvalidEventStateException.class);
     }
 }

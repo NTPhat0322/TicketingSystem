@@ -1,6 +1,6 @@
 {
   "privacyBlock": {
-    "allowList": [".env.example"]
+    "allowList": [".env.example", "InvalidCredentialsException.java"]
   },
   "simplify": {
     "threshold": {

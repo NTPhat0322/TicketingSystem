@@ -6,6 +6,7 @@ import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.usecase.UseCase;
+import com.tienphat.presentation.config.SecurityConfig;
 import com.tienphat.domain.exception.EventNotFoundException;
 import com.tienphat.domain.exception.InvalidEventScheduleException;
 import com.tienphat.domain.exception.InvalidEventStateException;
@@ -20,8 +21,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -36,6 +39,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -43,9 +47,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EventController.class)
-@Import(EventDtoMapperImpl.class)
+@Import({SecurityConfig.class, EventDtoMapperImpl.class})
 class EventControllerTest {
 
+    private static final UUID ACTOR_ID = UUID.fromString("018f0f9e-0e39-7f31-9e13-ec7c1f160010");
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant SALE_START = NOW.plus(1, ChronoUnit.DAYS);
     private static final Instant SALE_END = SALE_START.plus(7, ChronoUnit.DAYS);
@@ -79,7 +84,6 @@ class EventControllerTest {
 
     private static Map<String, Object> validCreateBody() {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("organizerId", UUID.randomUUID().toString());
         body.put("name", "Concert");
         body.put("description", "A concert");
         body.put("venueName", "My Dinh Stadium");
@@ -88,6 +92,12 @@ class EventControllerTest {
         body.put("saleStartTime", SALE_START.toString());
         body.put("saleEndTime", SALE_END.toString());
         return body;
+    }
+
+    private static RequestPostProcessor jwtFor(String role) {
+        return jwt()
+                .jwt(jwt -> jwt.subject(ACTOR_ID.toString()).claim("role", role))
+                .authorities(new SimpleGrantedAuthority("ROLE_" + role));
     }
 
     private static Map<String, Object> validUpdateBody() {
@@ -114,6 +124,7 @@ class EventControllerTest {
             Map<String, Object> body = validCreateBody();
 
             mockMvc.perform(post("/api/v1/events")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isCreated())
@@ -122,7 +133,8 @@ class EventControllerTest {
 
             ArgumentCaptor<CreateEventCommand> captor = ArgumentCaptor.forClass(CreateEventCommand.class);
             verify(createEventUseCase).execute(captor.capture());
-            assertThat(captor.getValue().organizerId()).isEqualTo(UUID.fromString((String) body.get("organizerId")));
+            assertThat(captor.getValue().actor().userId()).isEqualTo(ACTOR_ID);
+            assertThat(captor.getValue().actor().role()).isEqualTo(com.tienphat.domain.model.UserRole.ORGANIZER);
             assertThat(captor.getValue().name()).isEqualTo("Concert");
         }
 
@@ -130,6 +142,7 @@ class EventControllerTest {
         @DisplayName("malformed JSON body -> 400, use-case never invoked")
         void malformedJsonBody_returns400() throws Exception {
             mockMvc.perform(post("/api/v1/events")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{not valid json"))
                     .andExpect(status().isBadRequest());
@@ -144,6 +157,7 @@ class EventControllerTest {
             body.put("name", "  ");
 
             mockMvc.perform(post("/api/v1/events")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isBadRequest());
@@ -158,6 +172,7 @@ class EventControllerTest {
             body.put("venueName", "");
 
             mockMvc.perform(post("/api/v1/events")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isBadRequest());
@@ -166,15 +181,13 @@ class EventControllerTest {
         }
 
         @Test
-        @DisplayName("null organizerId -> 400, use-case never invoked")
-        void nullOrganizerId_returns400() throws Exception {
-            Map<String, Object> body = validCreateBody();
-            body.put("organizerId", null);
-
+        @DisplayName("CUSTOMER JWT -> 403, use-case never invoked")
+        void customerCannotCreate() throws Exception {
             mockMvc.perform(post("/api/v1/events")
+                            .with(jwtFor("CUSTOMER"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(body)))
-                    .andExpect(status().isBadRequest());
+                            .content(objectMapper.writeValueAsString(validCreateBody())))
+                    .andExpect(status().isForbidden());
 
             verifyNoInteractions(createEventUseCase);
         }
@@ -277,6 +290,7 @@ class EventControllerTest {
             when(updateEventUseCase.execute(any())).thenReturn(result);
 
             mockMvc.perform(put("/api/v1/events/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isOk())
@@ -295,6 +309,7 @@ class EventControllerTest {
                     .thenThrow(new EventNotFoundException("Event " + id + " not found"));
 
             mockMvc.perform(put("/api/v1/events/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isNotFound());
@@ -308,6 +323,7 @@ class EventControllerTest {
                     .thenThrow(new InvalidEventScheduleException("startTime must be before endTime"));
 
             mockMvc.perform(put("/api/v1/events/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isBadRequest());
@@ -323,9 +339,10 @@ class EventControllerTest {
         void validId_returns200() throws Exception {
             UUID id = UUID.randomUUID();
             EventResult result = sampleResult(id, EventStatus.CANCELLED);
-            when(deactivateEventUseCase.execute(eq(new DeactivateEventCommand(id)))).thenReturn(result);
+            when(deactivateEventUseCase.execute(any())).thenReturn(result);
 
-            mockMvc.perform(post("/api/v1/events/{id}/deactivate", id))
+            mockMvc.perform(post("/api/v1/events/{id}/deactivate", id)
+                            .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("CANCELLED"));
         }
@@ -337,7 +354,8 @@ class EventControllerTest {
             when(deactivateEventUseCase.execute(any()))
                     .thenThrow(new EventNotFoundException("Event " + id + " not found"));
 
-            mockMvc.perform(post("/api/v1/events/{id}/deactivate", id))
+            mockMvc.perform(post("/api/v1/events/{id}/deactivate", id)
+                            .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isNotFound());
         }
 
@@ -348,7 +366,8 @@ class EventControllerTest {
             when(deactivateEventUseCase.execute(any()))
                     .thenThrow(new InvalidEventStateException("Event is already CANCELLED"));
 
-            mockMvc.perform(post("/api/v1/events/{id}/deactivate", id))
+            mockMvc.perform(post("/api/v1/events/{id}/deactivate", id)
+                            .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isBadRequest());
         }
     }
