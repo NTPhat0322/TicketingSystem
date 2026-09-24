@@ -22,6 +22,7 @@ public class DeactivateEventUseCase implements UseCase<DeactivateEventCommand, E
         Event event = eventRepository.findById(command.id())
                 .orElseThrow(() -> new EventNotFoundException("Event " + command.id() + " not found"));
 
+        command.actor().requireCanManage(event.getOrganizerId());
         event.cancel();
 
         Event saved = eventRepository.save(event);

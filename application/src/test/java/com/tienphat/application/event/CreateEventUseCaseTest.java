@@ -1,9 +1,11 @@
 package com.tienphat.application.event;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.domain.exception.InvalidEventDataException;
 import com.tienphat.domain.exception.InvalidEventScheduleException;
 import com.tienphat.domain.model.Event;
 import com.tienphat.domain.model.EventStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.domain.repository.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +26,8 @@ import static org.mockito.Mockito.when;
 class CreateEventUseCaseTest {
 
     private static final UUID ORGANIZER_ID = UUID.randomUUID();
+    private static final AuthorizationContext ORGANIZER =
+            new AuthorizationContext(ORGANIZER_ID, UserRole.ORGANIZER);
     private static final Instant SALE_START = Instant.now().plus(1, ChronoUnit.DAYS);
     private static final Instant SALE_END = SALE_START.plus(7, ChronoUnit.DAYS);
     private static final Instant START = SALE_END.plus(1, ChronoUnit.DAYS);
@@ -42,7 +46,7 @@ class CreateEventUseCaseTest {
     @Test
     @DisplayName("execute() saves a new DRAFT event and returns the mapped result")
     void execute_savesAndReturnsDraftEvent() {
-        CreateEventCommand command = new CreateEventCommand(ORGANIZER_ID, "Concert", "A concert",
+        CreateEventCommand command = new CreateEventCommand(ORGANIZER, "Concert", "A concert",
                 "My Dinh Stadium", START, END, SALE_START, SALE_END);
         EventResult expected = new EventResult(UUID.randomUUID(), ORGANIZER_ID, "Concert", "A concert",
                 "My Dinh Stadium", START, END, SALE_START, SALE_END, EventStatus.DRAFT, Instant.now(), Instant.now());
@@ -61,7 +65,7 @@ class CreateEventUseCaseTest {
     @Test
     @DisplayName("execute() throws InvalidEventDataException on a blank name")
     void execute_throwsOnBlankName() {
-        CreateEventCommand command = new CreateEventCommand(ORGANIZER_ID, " ", "A concert",
+        CreateEventCommand command = new CreateEventCommand(ORGANIZER, " ", "A concert",
                 "My Dinh Stadium", START, END, SALE_START, SALE_END);
 
         assertThatThrownBy(() -> useCase.execute(command))
@@ -71,7 +75,7 @@ class CreateEventUseCaseTest {
     @Test
     @DisplayName("execute() throws InvalidEventScheduleException on an inverted event window")
     void execute_throwsOnInvertedEventWindow() {
-        CreateEventCommand command = new CreateEventCommand(ORGANIZER_ID, "Concert", "A concert",
+        CreateEventCommand command = new CreateEventCommand(ORGANIZER, "Concert", "A concert",
                 "My Dinh Stadium", END, START, SALE_START, SALE_END);
 
         assertThatThrownBy(() -> useCase.execute(command))

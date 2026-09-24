@@ -7,6 +7,7 @@ import com.tienphat.application.tickettype.DeactivateTicketTypeCommand;
 import com.tienphat.application.tickettype.TicketTypeResult;
 import com.tienphat.application.tickettype.UpdateTicketTypeCommand;
 import com.tienphat.application.usecase.UseCase;
+import com.tienphat.presentation.config.SecurityConfig;
 import com.tienphat.domain.exception.EventNotFoundException;
 import com.tienphat.domain.exception.InvalidTicketTypeDataException;
 import com.tienphat.domain.exception.TicketTypeConcurrentUpdateException;
@@ -22,8 +23,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,6 +41,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -45,9 +49,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TicketTypeController.class)
-@Import(TicketTypeDtoMapperImpl.class)
+@Import({SecurityConfig.class, TicketTypeDtoMapperImpl.class})
 class TicketTypeControllerTest {
 
+    private static final UUID ACTOR_ID = UUID.fromString("018f0f9e-0e39-7f31-9e13-ec7c1f160011");
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
     @Autowired
@@ -94,6 +99,12 @@ class TicketTypeControllerTest {
         return body;
     }
 
+    private static RequestPostProcessor jwtFor(String role) {
+        return jwt()
+                .jwt(jwt -> jwt.subject(ACTOR_ID.toString()).claim("role", role))
+                .authorities(new SimpleGrantedAuthority("ROLE_" + role));
+    }
+
     private static Map<String, Object> validUpdateBody() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "VIP v2");
@@ -117,6 +128,7 @@ class TicketTypeControllerTest {
             Map<String, Object> body = validCreateBody(eventId);
 
             mockMvc.perform(post("/api/v1/ticket-types")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isCreated())
@@ -136,6 +148,7 @@ class TicketTypeControllerTest {
             body.put("name", "  ");
 
             mockMvc.perform(post("/api/v1/ticket-types")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isBadRequest());
@@ -150,6 +163,7 @@ class TicketTypeControllerTest {
             body.put("price", -10);
 
             mockMvc.perform(post("/api/v1/ticket-types")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isBadRequest());
@@ -164,6 +178,7 @@ class TicketTypeControllerTest {
             body.put("totalQuantity", 0);
 
             mockMvc.perform(post("/api/v1/ticket-types")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isBadRequest());
@@ -179,6 +194,7 @@ class TicketTypeControllerTest {
                     .thenThrow(new EventNotFoundException("Event " + eventId + " not found"));
 
             mockMvc.perform(post("/api/v1/ticket-types")
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validCreateBody(eventId))))
                     .andExpect(status().isNotFound());
@@ -225,6 +241,7 @@ class TicketTypeControllerTest {
             when(updateTicketTypeUseCase.execute(any())).thenReturn(result);
 
             mockMvc.perform(put("/api/v1/ticket-types/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isOk())
@@ -243,6 +260,7 @@ class TicketTypeControllerTest {
                     .thenThrow(new TicketTypeNotFoundException("TicketType " + id + " not found"));
 
             mockMvc.perform(put("/api/v1/ticket-types/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isNotFound());
@@ -256,6 +274,7 @@ class TicketTypeControllerTest {
                     .thenThrow(new TicketTypeConcurrentUpdateException("TicketType " + id + " was updated concurrently"));
 
             mockMvc.perform(put("/api/v1/ticket-types/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isConflict());
@@ -269,6 +288,7 @@ class TicketTypeControllerTest {
                     .thenThrow(new InvalidTicketTypeDataException("totalQuantity cannot be below soldQuantity"));
 
             mockMvc.perform(put("/api/v1/ticket-types/{id}", id)
+                            .with(jwtFor("ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validUpdateBody())))
                     .andExpect(status().isBadRequest());
@@ -284,9 +304,10 @@ class TicketTypeControllerTest {
         void validId_returns200() throws Exception {
             UUID id = UUID.randomUUID();
             TicketTypeResult result = sampleResult(id, UUID.randomUUID(), TicketTypeStatus.CLOSED);
-            when(deactivateTicketTypeUseCase.execute(eq(new DeactivateTicketTypeCommand(id)))).thenReturn(result);
+            when(deactivateTicketTypeUseCase.execute(any())).thenReturn(result);
 
-            mockMvc.perform(post("/api/v1/ticket-types/{id}/deactivate", id))
+            mockMvc.perform(post("/api/v1/ticket-types/{id}/deactivate", id)
+                            .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("CLOSED"));
         }
@@ -298,7 +319,8 @@ class TicketTypeControllerTest {
             when(deactivateTicketTypeUseCase.execute(any()))
                     .thenThrow(new TicketTypeNotFoundException("TicketType " + id + " not found"));
 
-            mockMvc.perform(post("/api/v1/ticket-types/{id}/deactivate", id))
+            mockMvc.perform(post("/api/v1/ticket-types/{id}/deactivate", id)
+                            .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isNotFound());
         }
 
@@ -309,7 +331,8 @@ class TicketTypeControllerTest {
             when(deactivateTicketTypeUseCase.execute(any()))
                     .thenThrow(new TicketTypeNotAvailableException("TicketType " + id + " is already CLOSED"));
 
-            mockMvc.perform(post("/api/v1/ticket-types/{id}/deactivate", id))
+            mockMvc.perform(post("/api/v1/ticket-types/{id}/deactivate", id)
+                            .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isConflict());
         }
     }

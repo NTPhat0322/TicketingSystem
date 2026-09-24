@@ -1,9 +1,13 @@
 package com.tienphat.application.tickettype;
 
+import com.tienphat.application.auth.AuthorizationContext;
+import com.tienphat.domain.model.Event;
 import com.tienphat.domain.exception.TicketTypeNotAvailableException;
 import com.tienphat.domain.exception.TicketTypeNotFoundException;
 import com.tienphat.domain.model.TicketType;
 import com.tienphat.domain.model.TicketTypeStatus;
+import com.tienphat.domain.model.UserRole;
+import com.tienphat.domain.repository.EventRepository;
 import com.tienphat.domain.repository.TicketTypeRepository;
 import com.tienphat.domain.vo.Money;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,14 +29,19 @@ class DeactivateTicketTypeUseCaseTest {
 
     private static final UUID ID = UUID.randomUUID();
     private static final UUID EVENT_ID = UUID.randomUUID();
+    private static final UUID ORGANIZER_ID = UUID.randomUUID();
+    private static final AuthorizationContext ORGANIZER =
+            new AuthorizationContext(ORGANIZER_ID, UserRole.ORGANIZER);
 
     private final TicketTypeRepository ticketTypeRepository = mock(TicketTypeRepository.class);
+    private final EventRepository eventRepository = mock(EventRepository.class);
     private final TicketTypeMapper ticketTypeMapper = mock(TicketTypeMapper.class);
     private DeactivateTicketTypeUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new DeactivateTicketTypeUseCase(ticketTypeRepository, ticketTypeMapper);
+        useCase = new DeactivateTicketTypeUseCase(ticketTypeRepository, eventRepository, ticketTypeMapper);
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(anEvent()));
         when(ticketTypeRepository.save(any(TicketType.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -49,7 +58,7 @@ class DeactivateTicketTypeUseCaseTest {
                 100, 0, 4, 600, 0, TicketTypeStatus.CLOSED, Instant.now(), Instant.now());
         when(ticketTypeMapper.toResult(any(TicketType.class))).thenReturn(expected);
 
-        DeactivateTicketTypeCommand command = new DeactivateTicketTypeCommand(ID);
+        DeactivateTicketTypeCommand command = new DeactivateTicketTypeCommand(ID, ORGANIZER);
         TicketTypeResult result = useCase.execute(command);
 
         assertThat(type.getStatus()).isEqualTo(TicketTypeStatus.CLOSED);
@@ -61,7 +70,7 @@ class DeactivateTicketTypeUseCaseTest {
     void execute_throwsWhenNotFound() {
         when(ticketTypeRepository.findById(ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.execute(new DeactivateTicketTypeCommand(ID)))
+        assertThatThrownBy(() -> useCase.execute(new DeactivateTicketTypeCommand(ID, ORGANIZER)))
                 .isInstanceOf(TicketTypeNotFoundException.class);
     }
 
@@ -72,7 +81,16 @@ class DeactivateTicketTypeUseCaseTest {
         type.close();
         when(ticketTypeRepository.findById(ID)).thenReturn(Optional.of(type));
 
-        assertThatThrownBy(() -> useCase.execute(new DeactivateTicketTypeCommand(ID)))
+        assertThatThrownBy(() -> useCase.execute(new DeactivateTicketTypeCommand(ID, ORGANIZER)))
                 .isInstanceOf(TicketTypeNotAvailableException.class);
+    }
+
+    private static Event anEvent() {
+        Instant saleStart = Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS);
+        Instant saleEnd = saleStart.plus(7, java.time.temporal.ChronoUnit.DAYS);
+        Instant start = saleEnd.plus(1, java.time.temporal.ChronoUnit.DAYS);
+        Instant end = start.plus(3, java.time.temporal.ChronoUnit.HOURS);
+        return Event.create(EVENT_ID, ORGANIZER_ID, "Concert", "desc", "Venue",
+                start, end, saleStart, saleEnd);
     }
 }

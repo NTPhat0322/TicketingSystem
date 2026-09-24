@@ -129,8 +129,9 @@ public class UseCaseConfig {
 
     @Bean
     public UseCase<UpdateTicketTypeCommand, TicketTypeResult> updateTicketTypeUseCase(
-            TicketTypeRepository ticketTypeRepository, TicketTypeMapper ticketTypeMapper) {
-        return new UpdateTicketTypeUseCase(ticketTypeRepository, ticketTypeMapper);
+            TicketTypeRepository ticketTypeRepository, EventRepository eventRepository,
+            TicketTypeMapper ticketTypeMapper) {
+        return new UpdateTicketTypeUseCase(ticketTypeRepository, eventRepository, ticketTypeMapper);
     }
 
     @Bean
@@ -147,7 +148,8 @@ public class UseCaseConfig {
 
     @Bean
     public UseCase<DeactivateTicketTypeCommand, TicketTypeResult> deactivateTicketTypeUseCase(
-            TicketTypeRepository ticketTypeRepository, TicketTypeMapper ticketTypeMapper) {
-        return new DeactivateTicketTypeUseCase(ticketTypeRepository, ticketTypeMapper);
+            TicketTypeRepository ticketTypeRepository, EventRepository eventRepository,
+            TicketTypeMapper ticketTypeMapper) {
+        return new DeactivateTicketTypeUseCase(ticketTypeRepository, eventRepository, ticketTypeMapper);
     }
 }

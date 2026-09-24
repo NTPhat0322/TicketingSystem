@@ -1,5 +1,6 @@
 package com.tienphat.presentation.event;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.EventResult;
 import com.tienphat.application.event.UpdateEventCommand;
@@ -17,10 +18,12 @@ import java.util.UUID;
 @Mapper(componentModel = "spring")
 public interface EventDtoMapper {
 
-    CreateEventCommand toCommand(CreateEventRequest request);
+    @Mapping(target = "actor", source = "actor")
+    CreateEventCommand toCommand(CreateEventRequest request, AuthorizationContext actor);
 
     @Mapping(target = "id", source = "id")
-    UpdateEventCommand toCommand(UUID id, UpdateEventRequest request);
+    @Mapping(target = "actor", source = "actor")
+    UpdateEventCommand toCommand(UUID id, UpdateEventRequest request, AuthorizationContext actor);
 
     EventResponse toResponse(EventResult result);
 

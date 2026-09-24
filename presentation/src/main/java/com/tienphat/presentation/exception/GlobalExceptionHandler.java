@@ -25,6 +25,7 @@ public class GlobalExceptionHandler {
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
             case CONFLICT -> HttpStatus.CONFLICT;
             case UNAUTHORIZED -> HttpStatus.UNAUTHORIZED;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
         return ProblemDetail.forStatusAndDetail(status, ex.getMessage());

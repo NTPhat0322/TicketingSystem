@@ -3,8 +3,10 @@ package com.tienphat.presentation.user;
 import com.tienphat.application.user.ChangeUserRoleCommand;
 import com.tienphat.application.user.UserResult;
 import com.tienphat.application.usecase.UseCase;
+import com.tienphat.presentation.config.OpenApiConfig;
 import com.tienphat.presentation.user.dto.ChangeRoleRequest;
 import com.tienphat.presentation.user.dto.UserResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,6 +22,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/users")
+@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
 public class UserController {
 
     private final UseCase<ChangeUserRoleCommand, UserResult> changeUserRoleUseCase;

@@ -1,11 +1,13 @@
 package com.tienphat.application.tickettype;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.domain.exception.EventNotFoundException;
 import com.tienphat.domain.exception.InvalidMoneyException;
 import com.tienphat.domain.exception.InvalidTicketTypeDataException;
 import com.tienphat.domain.model.Event;
 import com.tienphat.domain.model.TicketType;
 import com.tienphat.domain.model.TicketTypeStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.domain.repository.EventRepository;
 import com.tienphat.domain.repository.TicketTypeRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +31,9 @@ import static org.mockito.Mockito.when;
 class CreateTicketTypeUseCaseTest {
 
     private static final UUID EVENT_ID = UUID.randomUUID();
+    private static final UUID ORGANIZER_ID = UUID.randomUUID();
+    private static final AuthorizationContext ORGANIZER =
+            new AuthorizationContext(ORGANIZER_ID, UserRole.ORGANIZER);
 
     private final TicketTypeRepository ticketTypeRepository = mock(TicketTypeRepository.class);
     private final EventRepository eventRepository = mock(EventRepository.class);
@@ -38,7 +43,7 @@ class CreateTicketTypeUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new CreateTicketTypeUseCase(ticketTypeRepository, eventRepository, ticketTypeMapper);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(mock(Event.class)));
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(anEvent()));
         when(ticketTypeRepository.save(any(TicketType.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -46,7 +51,7 @@ class CreateTicketTypeUseCaseTest {
     @DisplayName("execute() saves a new ACTIVE ticket type with zero soldQuantity and returns the mapped result")
     void execute_savesAndReturnsActiveTicketType() {
         CreateTicketTypeCommand command = new CreateTicketTypeCommand(
-                EVENT_ID, "VIP", new BigDecimal("500000"), 100, 4, 600);
+                EVENT_ID, ORGANIZER, "VIP", new BigDecimal("500000"), 100, 4, 600);
         TicketTypeResult expected = new TicketTypeResult(UUID.randomUUID(), EVENT_ID, "VIP",
                 new BigDecimal("500000.00"), 100, 0, 4, 600, 0, TicketTypeStatus.ACTIVE,
                 Instant.now(), Instant.now());
@@ -68,7 +73,7 @@ class CreateTicketTypeUseCaseTest {
     @DisplayName("execute() throws InvalidMoneyException on a negative price before TicketType.create is reached")
     void execute_throwsOnNegativePrice() {
         CreateTicketTypeCommand command = new CreateTicketTypeCommand(
-                EVENT_ID, "VIP", new BigDecimal("-1"), 100, 4, 600);
+                EVENT_ID, ORGANIZER, "VIP", new BigDecimal("-1"), 100, 4, 600);
 
         assertThatThrownBy(() -> useCase.execute(command))
                 .isInstanceOf(InvalidMoneyException.class);
@@ -79,7 +84,7 @@ class CreateTicketTypeUseCaseTest {
     @DisplayName("execute() throws InvalidTicketTypeDataException on a non-positive totalQuantity")
     void execute_throwsOnNonPositiveTotalQuantity() {
         CreateTicketTypeCommand command = new CreateTicketTypeCommand(
-                EVENT_ID, "VIP", new BigDecimal("500000"), 0, 4, 600);
+                EVENT_ID, ORGANIZER, "VIP", new BigDecimal("500000"), 0, 4, 600);
 
         assertThatThrownBy(() -> useCase.execute(command))
                 .isInstanceOf(InvalidTicketTypeDataException.class);
@@ -90,10 +95,19 @@ class CreateTicketTypeUseCaseTest {
     void execute_throwsWhenEventNotFound() {
         when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.empty());
         CreateTicketTypeCommand command = new CreateTicketTypeCommand(
-                EVENT_ID, "VIP", new BigDecimal("500000"), 100, 4, 600);
+                EVENT_ID, ORGANIZER, "VIP", new BigDecimal("500000"), 100, 4, 600);
 
         assertThatThrownBy(() -> useCase.execute(command))
                 .isInstanceOf(EventNotFoundException.class);
         verify(ticketTypeRepository, never()).save(any());
+    }
+
+    private static Event anEvent() {
+        Instant saleStart = Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS);
+        Instant saleEnd = saleStart.plus(7, java.time.temporal.ChronoUnit.DAYS);
+        Instant start = saleEnd.plus(1, java.time.temporal.ChronoUnit.DAYS);
+        Instant end = start.plus(3, java.time.temporal.ChronoUnit.HOURS);
+        return Event.create(EVENT_ID, ORGANIZER_ID, "Concert", "desc", "Venue",
+                start, end, saleStart, saleEnd);
     }
 }

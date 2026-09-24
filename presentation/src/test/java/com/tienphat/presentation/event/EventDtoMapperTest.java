@@ -1,9 +1,11 @@
 package com.tienphat.presentation.event;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.EventResult;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.domain.model.EventStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.domain.repository.PageResult;
 import com.tienphat.presentation.dto.PageResponse;
 import com.tienphat.presentation.event.dto.CreateEventRequest;
@@ -25,19 +27,19 @@ class EventDtoMapperTest {
     private final EventDtoMapper mapper = Mappers.getMapper(EventDtoMapper.class);
 
     @Test
-    @DisplayName("toCommand(CreateEventRequest) preserves every field")
+    @DisplayName("toCommand(CreateEventRequest, actor) preserves every field and actor")
     void toCommand_fromCreateRequest_preservesEveryField() {
         Instant saleStart = Instant.now().plus(1, ChronoUnit.DAYS);
         Instant saleEnd = saleStart.plus(7, ChronoUnit.DAYS);
         Instant start = saleEnd.plus(1, ChronoUnit.DAYS);
         Instant end = start.plus(3, ChronoUnit.HOURS);
-        UUID organizerId = UUID.randomUUID();
         CreateEventRequest request = new CreateEventRequest(
-                organizerId, "Concert", "A concert", "My Dinh Stadium", start, end, saleStart, saleEnd);
+                "Concert", "A concert", "My Dinh Stadium", start, end, saleStart, saleEnd);
+        AuthorizationContext actor = new AuthorizationContext(UUID.randomUUID(), UserRole.ORGANIZER);
 
-        CreateEventCommand command = mapper.toCommand(request);
+        CreateEventCommand command = mapper.toCommand(request, actor);
 
-        assertThat(command.organizerId()).isEqualTo(organizerId);
+        assertThat(command.actor()).isEqualTo(actor);
         assertThat(command.name()).isEqualTo("Concert");
         assertThat(command.description()).isEqualTo("A concert");
         assertThat(command.venueName()).isEqualTo("My Dinh Stadium");
@@ -48,7 +50,7 @@ class EventDtoMapperTest {
     }
 
     @Test
-    @DisplayName("toCommand(id, UpdateEventRequest) preserves the path id plus every body field")
+    @DisplayName("toCommand(id, UpdateEventRequest, actor) preserves the path id plus every body field")
     void toCommand_fromUpdateRequest_preservesPathIdAndEveryField() {
         Instant saleStart = Instant.now().plus(1, ChronoUnit.DAYS);
         Instant saleEnd = saleStart.plus(7, ChronoUnit.DAYS);
@@ -58,9 +60,11 @@ class EventDtoMapperTest {
         UpdateEventRequest request = new UpdateEventRequest(
                 "Concert v2", "Updated description", "New Venue", start, end, saleStart, saleEnd);
 
-        UpdateEventCommand command = mapper.toCommand(id, request);
+        AuthorizationContext actor = new AuthorizationContext(UUID.randomUUID(), UserRole.ORGANIZER);
+        UpdateEventCommand command = mapper.toCommand(id, request, actor);
 
         assertThat(command.id()).isEqualTo(id);
+        assertThat(command.actor()).isEqualTo(actor);
         assertThat(command.name()).isEqualTo("Concert v2");
         assertThat(command.description()).isEqualTo("Updated description");
         assertThat(command.venueName()).isEqualTo("New Venue");

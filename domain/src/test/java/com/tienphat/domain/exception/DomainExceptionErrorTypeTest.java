@@ -80,6 +80,12 @@ class DomainExceptionErrorTypeTest {
     }
 
     @Test
+    @DisplayName("ForbiddenOperationException maps to FORBIDDEN")
+    void forbiddenOperation_mapsToForbidden() {
+        assertThat(new ForbiddenOperationException("forbidden").errorType()).isEqualTo(ErrorType.FORBIDDEN);
+    }
+
+    @Test
     @DisplayName("a DomainException subclass that does not override errorType() defaults to INTERNAL")
     void unmappedSubclass_defaultsToInternal() {
         DomainException unmapped = new DomainException("boom") {};

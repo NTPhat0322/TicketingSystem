@@ -1,11 +1,13 @@
 package com.tienphat.application.event;
 
+import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.domain.exception.EventNotFoundException;
 import com.tienphat.domain.exception.InvalidEventDataException;
 import com.tienphat.domain.exception.InvalidEventScheduleException;
 import com.tienphat.domain.exception.InvalidEventStateException;
 import com.tienphat.domain.model.Event;
 import com.tienphat.domain.model.EventStatus;
+import com.tienphat.domain.model.UserRole;
 import com.tienphat.domain.repository.EventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +28,8 @@ class UpdateEventUseCaseTest {
 
     private static final UUID ID = UUID.randomUUID();
     private static final UUID ORGANIZER_ID = UUID.randomUUID();
+    private static final AuthorizationContext ORGANIZER =
+            new AuthorizationContext(ORGANIZER_ID, UserRole.ORGANIZER);
     private static final Instant SALE_START = Instant.now().plus(1, ChronoUnit.DAYS);
     private static final Instant SALE_END = SALE_START.plus(7, ChronoUnit.DAYS);
     private static final Instant START = SALE_END.plus(1, ChronoUnit.DAYS);
@@ -55,7 +59,7 @@ class UpdateEventUseCaseTest {
                 "New Venue", START, END, SALE_START, SALE_END, EventStatus.DRAFT, Instant.now(), Instant.now());
         when(eventMapper.toResult(any(Event.class))).thenReturn(expected);
 
-        UpdateEventCommand command = new UpdateEventCommand(ID, "New name", "New description",
+        UpdateEventCommand command = new UpdateEventCommand(ID, ORGANIZER, "New name", "New description",
                 "New Venue", START, END, SALE_START, SALE_END);
 
         EventResult result = useCase.execute(command);
@@ -68,7 +72,7 @@ class UpdateEventUseCaseTest {
     @DisplayName("execute() throws EventNotFoundException when the id does not exist")
     void execute_throwsWhenNotFound() {
         when(eventRepository.findById(ID)).thenReturn(Optional.empty());
-        UpdateEventCommand command = new UpdateEventCommand(ID, "New name", "New description",
+        UpdateEventCommand command = new UpdateEventCommand(ID, ORGANIZER, "New name", "New description",
                 "New Venue", START, END, SALE_START, SALE_END);
 
         assertThatThrownBy(() -> useCase.execute(command))
@@ -81,7 +85,7 @@ class UpdateEventUseCaseTest {
         Event event = aDraft();
         event.publish();
         when(eventRepository.findById(ID)).thenReturn(Optional.of(event));
-        UpdateEventCommand command = new UpdateEventCommand(ID, "New name", "New description",
+        UpdateEventCommand command = new UpdateEventCommand(ID, ORGANIZER, "New name", "New description",
                 "New Venue", START, END, SALE_START, SALE_END);
 
         assertThatThrownBy(() -> useCase.execute(command))
@@ -92,7 +96,7 @@ class UpdateEventUseCaseTest {
     @DisplayName("execute() throws InvalidEventDataException on a blank name")
     void execute_throwsOnBlankName() {
         when(eventRepository.findById(ID)).thenReturn(Optional.of(aDraft()));
-        UpdateEventCommand command = new UpdateEventCommand(ID, " ", "New description",
+        UpdateEventCommand command = new UpdateEventCommand(ID, ORGANIZER, " ", "New description",
                 "New Venue", START, END, SALE_START, SALE_END);
 
         assertThatThrownBy(() -> useCase.execute(command))
@@ -103,7 +107,7 @@ class UpdateEventUseCaseTest {
     @DisplayName("execute() throws InvalidEventScheduleException on an inverted event window")
     void execute_throwsOnInvertedEventWindow() {
         when(eventRepository.findById(ID)).thenReturn(Optional.of(aDraft()));
-        UpdateEventCommand command = new UpdateEventCommand(ID, "New name", "New description",
+        UpdateEventCommand command = new UpdateEventCommand(ID, ORGANIZER, "New name", "New description",
                 "New Venue", END, START, SALE_START, SALE_END);
 
         assertThatThrownBy(() -> useCase.execute(command))

@@ -3,6 +3,7 @@ package com.tienphat.presentation.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -72,10 +73,21 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
                                 "/v3/api-docs/**",
-                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/events",
                                 "/api/v1/events/**",
+                                "/api/v1/ticket-types",
                                 "/api/v1/ticket-types/**"
                         ).permitAll()
+                        .requestMatchers(
+                                "/api/v1/events",
+                                "/api/v1/events/**",
+                                "/api/v1/ticket-types",
+                                "/api/v1/ticket-types/**"
+                        ).authenticated()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));

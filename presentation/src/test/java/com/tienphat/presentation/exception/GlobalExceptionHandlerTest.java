@@ -2,6 +2,7 @@ package com.tienphat.presentation.exception;
 
 import com.tienphat.domain.exception.DomainException;
 import com.tienphat.domain.exception.EventNotFoundException;
+import com.tienphat.domain.exception.ForbiddenOperationException;
 import com.tienphat.domain.exception.InvalidCredentialsException;
 import com.tienphat.domain.exception.InvalidEventDataException;
 import com.tienphat.domain.exception.InvalidEventScheduleException;
@@ -47,7 +48,8 @@ class GlobalExceptionHandlerTest {
             Map.entry(new InvalidEventScheduleException("start after end"), HttpStatus.BAD_REQUEST),
             Map.entry(new InvalidEventStateException("already cancelled"), HttpStatus.BAD_REQUEST),
             Map.entry(new InvalidTicketTypeDataException("negative price"), HttpStatus.BAD_REQUEST),
-            Map.entry(new InvalidCredentialsException("invalid credentials"), HttpStatus.UNAUTHORIZED));
+            Map.entry(new InvalidCredentialsException("invalid credentials"), HttpStatus.UNAUTHORIZED),
+            Map.entry(new ForbiddenOperationException("forbidden"), HttpStatus.FORBIDDEN));
 
     @Test
     @DisplayName("each of the 9 mapped domain exceptions produces its expected HttpStatus and the exception's message as detail")

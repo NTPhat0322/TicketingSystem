@@ -6,5 +6,6 @@ public enum ErrorType {
     NOT_FOUND,
     CONFLICT,
     UNAUTHORIZED,
+    FORBIDDEN,
     INTERNAL
 }
