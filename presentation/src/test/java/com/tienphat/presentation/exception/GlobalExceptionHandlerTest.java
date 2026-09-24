@@ -2,6 +2,7 @@ package com.tienphat.presentation.exception;
 
 import com.tienphat.domain.exception.DomainException;
 import com.tienphat.domain.exception.EventNotFoundException;
+import com.tienphat.domain.exception.InvalidCredentialsException;
 import com.tienphat.domain.exception.InvalidEventDataException;
 import com.tienphat.domain.exception.InvalidEventScheduleException;
 import com.tienphat.domain.exception.InvalidEventStateException;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -44,10 +46,11 @@ class GlobalExceptionHandlerTest {
             Map.entry(new InvalidEventDataException("blank name"), HttpStatus.BAD_REQUEST),
             Map.entry(new InvalidEventScheduleException("start after end"), HttpStatus.BAD_REQUEST),
             Map.entry(new InvalidEventStateException("already cancelled"), HttpStatus.BAD_REQUEST),
-            Map.entry(new InvalidTicketTypeDataException("negative price"), HttpStatus.BAD_REQUEST));
+            Map.entry(new InvalidTicketTypeDataException("negative price"), HttpStatus.BAD_REQUEST),
+            Map.entry(new InvalidCredentialsException("invalid credentials"), HttpStatus.UNAUTHORIZED));
 
     @Test
-    @DisplayName("each of the 8 mapped domain exceptions produces its expected HttpStatus and the exception's message as detail")
+    @DisplayName("each of the 9 mapped domain exceptions produces its expected HttpStatus and the exception's message as detail")
     void mappedDomainExceptions_produceExpectedStatusAndDetail() {
         MAPPED_EXCEPTIONS.forEach((exception, expectedStatus) -> {
             ProblemDetail problem = handler.handleDomainException(exception);
@@ -125,6 +128,17 @@ class GlobalExceptionHandlerTest {
         ProblemDetail problem = handler.handleNoResourceFound(ex);
 
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+    }
+
+    @Test
+    @DisplayName("AccessDeniedException produces a 403 ProblemDetail with a fixed, non-leaking detail")
+    void accessDenied_producesForbidden() {
+        AccessDeniedException ex = new AccessDeniedException("user lacks ROLE_ADMIN for this operation");
+
+        ProblemDetail problem = handler.handleAccessDenied(ex);
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertThat(problem.getDetail()).doesNotContain("ROLE_ADMIN");
     }
 
     @Test

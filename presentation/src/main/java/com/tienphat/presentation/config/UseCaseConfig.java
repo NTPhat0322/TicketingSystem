@@ -1,5 +1,11 @@
 package com.tienphat.presentation.config;
 
+import com.tienphat.application.auth.LoginCommand;
+import com.tienphat.application.auth.LoginResult;
+import com.tienphat.application.auth.LoginUseCase;
+import com.tienphat.application.auth.LogoutUseCase;
+import com.tienphat.application.auth.RefreshTokenStore;
+import com.tienphat.application.auth.RefreshUseCase;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.CreateEventUseCase;
 import com.tienphat.application.event.DeactivateEventCommand;
@@ -20,19 +26,70 @@ import com.tienphat.application.tickettype.TicketTypeMapper;
 import com.tienphat.application.tickettype.TicketTypeResult;
 import com.tienphat.application.tickettype.UpdateTicketTypeCommand;
 import com.tienphat.application.tickettype.UpdateTicketTypeUseCase;
+import com.tienphat.application.user.ChangeUserRoleCommand;
+import com.tienphat.application.user.ChangeUserRoleUseCase;
+import com.tienphat.application.user.GetUserUseCase;
+import com.tienphat.application.user.RegisterUserCommand;
+import com.tienphat.application.user.RegisterUserUseCase;
+import com.tienphat.application.user.UserMapper;
+import com.tienphat.application.user.UserResult;
 import com.tienphat.application.usecase.UseCase;
 import com.tienphat.domain.repository.EventRepository;
 import com.tienphat.domain.repository.PageRequest;
 import com.tienphat.domain.repository.PageResult;
 import com.tienphat.domain.repository.TicketTypeRepository;
+import com.tienphat.domain.repository.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 import java.util.UUID;
 
 @Configuration
 public class UseCaseConfig {
+
+    @Bean
+    public UseCase<RegisterUserCommand, UserResult> registerUserUseCase(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            UserMapper userMapper) {
+        return new RegisterUserUseCase(userRepository, passwordEncoder, userMapper);
+    }
+
+    @Bean
+    public UseCase<LoginCommand, LoginResult> loginUseCase(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            RefreshTokenStore refreshTokenStore) {
+        return new LoginUseCase(userRepository, passwordEncoder, refreshTokenStore);
+    }
+
+    @Bean
+    public UseCase<String, LoginResult> refreshUseCase(
+            UserRepository userRepository,
+            RefreshTokenStore refreshTokenStore) {
+        return new RefreshUseCase(userRepository, refreshTokenStore);
+    }
+
+    @Bean
+    public UseCase<String, Void> logoutUseCase(RefreshTokenStore refreshTokenStore) {
+        return new LogoutUseCase(refreshTokenStore);
+    }
+
+    @Bean
+    public UseCase<ChangeUserRoleCommand, UserResult> changeUserRoleUseCase(
+            UserRepository userRepository,
+            UserMapper userMapper) {
+        return new ChangeUserRoleUseCase(userRepository, userMapper);
+    }
+
+    @Bean
+    public UseCase<UUID, UserResult> getUserUseCase(
+            UserRepository userRepository,
+            UserMapper userMapper) {
+        return new GetUserUseCase(userRepository, userMapper);
+    }
 
     @Bean
     public UseCase<CreateEventCommand, EventResult> createEventUseCase(

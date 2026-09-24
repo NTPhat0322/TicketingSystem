@@ -56,6 +56,30 @@ class DomainExceptionErrorTypeTest {
     }
 
     @Test
+    @DisplayName("UserNotFoundException maps to NOT_FOUND")
+    void userNotFound_mapsToNotFound() {
+        assertThat(new UserNotFoundException("not found").errorType()).isEqualTo(ErrorType.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("DuplicateEmailException maps to CONFLICT")
+    void duplicateEmail_mapsToConflict() {
+        assertThat(new DuplicateEmailException("conflict").errorType()).isEqualTo(ErrorType.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("InvalidCredentialsException maps to UNAUTHORIZED")
+    void invalidCredentials_mapsToUnauthorized() {
+        assertThat(new InvalidCredentialsException("invalid").errorType()).isEqualTo(ErrorType.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("InvalidRefreshTokenException maps to UNAUTHORIZED")
+    void invalidRefreshToken_mapsToUnauthorized() {
+        assertThat(new InvalidRefreshTokenException("invalid").errorType()).isEqualTo(ErrorType.UNAUTHORIZED);
+    }
+
+    @Test
     @DisplayName("a DomainException subclass that does not override errorType() defaults to INTERNAL")
     void unmappedSubclass_defaultsToInternal() {
         DomainException unmapped = new DomainException("boom") {};
