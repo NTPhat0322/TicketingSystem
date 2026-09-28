@@ -7,6 +7,7 @@ No product story is completed directly. This phase unblocks all later Redis/Rabb
 ## Affected Areas
 
 - `infrastructure/pom.xml`
+- `domain/pom.xml` (annotation-processing build fix required to compile the existing Lombok-based domain)
 - `bootstrap/pom.xml` or test dependencies as required by the chosen container test layout
 - `docker-compose.yml`
 - `bootstrap/src/main/resources/application.yml`
@@ -57,4 +58,14 @@ If the phase fails, remove only the new Redis/Rabbit dependencies, Compose servi
 
 - Spring Boot 4.1.1 may require a specific Spring AMQP/Data Redis starter combination; resolve through the parent BOM before pinning versions.
 - Generic Testcontainers need explicit dynamic property wiring; a green Maven compile without a real container smoke test is not sufficient.
+
+## Progress
+
+- [x] Add Redis and RabbitMQ runtime/test dependencies.
+- [x] Add configurable Compose services, durable volumes, health checks, and app dependency ordering.
+- [x] Add environment-backed Spring Redis/RabbitMQ configuration and a messaging feature flag.
+- [x] Add durable order-create and TTL/DLX topology configuration.
+- [x] Add real PostgreSQL/Redis/RabbitMQ Testcontainers foundation and smoke tests.
+- [x] Fix the pre-existing domain Lombok annotation-processor gap so the reactor compiles on the current JDK toolchain.
+- [x] Verify Maven tests, Docker Compose startup, service health, and `/v3/api-docs`.
 

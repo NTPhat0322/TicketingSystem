@@ -8,6 +8,33 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
 
 jwt:
   secret: ${JWT_SECRET}
+
+ticketing:
+  messaging:
+    enabled: ${MESSAGING_ENABLED:true}
+    order-exchange: ${ORDER_EXCHANGE:order.exchange}
+    order-create-queue: ${ORDER_CREATE_QUEUE:order.create.queue}
+    order-create-routing-key: ${ORDER_CREATE_ROUTING_KEY:order.create}
+    order-expire-exchange: ${ORDER_EXPIRE_EXCHANGE:order.expire.exchange}
+    order-hold-ttl-queue: ${ORDER_HOLD_TTL_QUEUE:order.hold.ttl.queue}
+    order-hold-delay-routing-key: ${ORDER_HOLD_DELAY_ROUTING_KEY:order.create.delay}
+    order-expire-queue: ${ORDER_EXPIRE_QUEUE:order.expire.queue}
+    order-expire-routing-key: ${ORDER_EXPIRE_ROUTING_KEY:order.expire}
+    reservation-intent-retry-delay: ${RESERVATION_INTENT_RETRY_DELAY:5s}
+    reconciliation-interval: ${RECONCILIATION_INTERVAL:1m}

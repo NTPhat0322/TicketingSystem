@@ -3,6 +3,13 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  rabbitmq:
+    username: test
+    password: test
 
 jwt:
   secret: phase3-test-secret-key-must-be-at-least-32-bytes-long
+
+ticketing:
+  messaging:
+    enabled: false

@@ -1,6 +1,6 @@
 # Plan: Ticket purchase and asynchronous reservation
 
-Status: Ready
+Status: In progress (Phase 1 complete; awaiting approval for Phase 2)
 Date: 2026-09-25
 Mode: Hard
 Test: default
@@ -89,7 +89,7 @@ This is the smallest design that keeps the user's chosen `CREATING` flow recover
 
 ## Phase Order
 
-- [ ] Phase 1: Runtime dependencies, Docker services, and integration-test foundation
+- [x] Phase 1: Runtime dependencies, Docker services, and integration-test foundation
 - [ ] Phase 2: Domain/application reservation contracts and Order status API model
 - [ ] Phase 3: Redis Lua reservation, Hash/Sorted Set intent store, and cache warming
 - [ ] Phase 4: PostgreSQL Order/Payment/Ticket/Outbox persistence
@@ -151,3 +151,29 @@ The architecture and product-level defaults are now confirmed. The next implemen
 ```text
 Use $ck-cook --hard plans/ticket-purchase-hold/plan.md
 ```
+
+## Session Notes
+<!-- Updated by ck-cook; keep this section resumable. -->
+**Last active:** 2026-09-25 15:00
+**Phase in progress:** phase-01-runtime-and-test-foundation
+**Status:** Phase 1 implementation and verification complete; Hard mode is waiting for explicit approval before Phase 2.
+
+### Decisions made this session
+- Added Spring Data Redis and Spring AMQP only to `infrastructure`; domain/application remain free of broker/cache imports.
+- Added durable Redis/RabbitMQ Compose services and a durable order-create plus TTL/DLX topology.
+- Made host ports configurable because this machine already runs another PostgreSQL/Redis/RabbitMQ stack; the verification run used `5433`, `6380`, `5673`, `15673`, and app `8081` while container-internal ports stayed unchanged.
+- Added the missing Lombok annotation processor configuration to `domain/pom.xml`; this was required for the existing domain source to compile.
+
+### Verification
+- `./mvnw.cmd -pl domain -am test` — pass, 222 tests.
+- `./mvnw.cmd -pl infrastructure -am test` — pass, 222 domain + 59 application + 30 infrastructure tests; real PostgreSQL, Redis, and RabbitMQ containers used.
+- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass, 222 domain + 59 application + 30 infrastructure + 80 presentation + 9 bootstrap tests.
+- `docker compose up -d --build` — pass with the documented host-port overrides; DB, Redis, and RabbitMQ healthy.
+- `GET http://localhost:8081/v3/api-docs` — HTTP 200.
+
+### Review
+- `code-review` verdict: APPROVED. No actionable findings remain in the Phase 1 diff.
+- Residual risk is intentionally deferred to later phases: reservation Lua correctness, relay retry/claim behavior, Order idempotency, expiry/payment race, and concurrency invariants are not implemented or tested yet.
+
+### Next immediate action
+Run the fresh `code-review` skill against the Phase 1 diff, report findings, then wait for explicit user approval before starting Phase 2.
