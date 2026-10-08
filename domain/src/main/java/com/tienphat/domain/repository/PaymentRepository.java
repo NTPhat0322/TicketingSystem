@@ -22,7 +22,16 @@ public interface PaymentRepository {
 
     Optional<Payment> findById(UUID id);
 
+    /** Loads a payment while holding a database row lock for the surrounding transaction. */
+    Optional<Payment> findByIdForUpdate(UUID id);
+
     Optional<Payment> findByOrderId(UUID orderId);
 
+    /** Loads an order's unique payment attempt while holding a database row lock. */
+    Optional<Payment> findByOrderIdForUpdate(UUID orderId);
+
     Optional<Payment> findByTransactionRef(String transactionRef);
+
+    /** Loads a callback's payment while holding a database row lock. */
+    Optional<Payment> findByTransactionRefForUpdate(String transactionRef);
 }

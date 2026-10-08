@@ -18,5 +18,11 @@ public interface TicketTypeRepository {
 
     Optional<TicketType> findById(UUID id);
 
+    /**
+     * Loads a ticket type while holding a database row lock for the surrounding transaction.
+     * Payment confirmation uses this boundary before incrementing soldQuantity.
+     */
+    Optional<TicketType> findByIdForUpdate(UUID id);
+
     List<TicketType> findAllByEventId(UUID eventId);
 }

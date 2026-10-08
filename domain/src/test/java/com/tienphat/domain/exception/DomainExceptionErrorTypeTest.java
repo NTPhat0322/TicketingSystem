@@ -86,6 +86,23 @@ class DomainExceptionErrorTypeTest {
     }
 
     @Test
+    @DisplayName("reservation business errors map to conflict")
+    void reservationBusinessErrors_mapToConflict() {
+        assertThat(new TicketTypeSoldOutException("sold out").errorType()).isEqualTo(ErrorType.CONFLICT);
+        assertThat(new ReservationLimitExceededException("limit").errorType()).isEqualTo(ErrorType.CONFLICT);
+        assertThat(new StockNotWarmedException("not warmed").errorType()).isEqualTo(ErrorType.CONFLICT);
+        assertThat(new EventNotOnSaleException("not on sale").errorType()).isEqualTo(ErrorType.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("reservation request data maps to validation and missing orders map to not found")
+    void reservationRequestAndOrderErrors_mapCorrectly() {
+        assertThat(new InvalidReservationRequestException("invalid").errorType())
+                .isEqualTo(ErrorType.VALIDATION);
+        assertThat(new OrderNotFoundException("missing").errorType()).isEqualTo(ErrorType.NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("a DomainException subclass that does not override errorType() defaults to INTERNAL")
     void unmappedSubclass_defaultsToInternal() {
         DomainException unmapped = new DomainException("boom") {};

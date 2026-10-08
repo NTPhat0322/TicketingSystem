@@ -66,6 +66,16 @@ public class Order {
     }
 
     /**
+     * Generates the identity that is reserved before an Order row exists.
+     *
+     * <p>The reservation flow calls this before touching Redis, then carries the same UUID through
+     * the intent, RabbitMQ command, and eventual PostgreSQL Order row.
+     */
+    public static UUID generateId() {
+        return UuidV7Generator.generate();
+    }
+
+    /**
      * Opens an empty {@code PENDING_PAYMENT} order whose hold lapses {@code holdDurationSec} from
      * now. Lines are added afterwards through {@link #addItem}.
      *
@@ -73,6 +83,33 @@ public class Order {
      * order can in principle span tiers; the caller decides which duration applies.
      */
     public static Order create(String orderCode, UUID userId, UUID eventId, int holdDurationSec) {
+        return create(generateId(), orderCode, userId, eventId, holdDurationSec);
+    }
+
+    /**
+     * Opens an order with an identity supplied by the application before persistence. The id must
+     * remain a UUIDv7 so the reservation and the later database row share the same identity rule.
+     */
+    public static Order create(UUID id, String orderCode, UUID userId, UUID eventId,
+                               int holdDurationSec) {
+        if (holdDurationSec <= 0) {
+            throw new InvalidOrderDataException(
+                    "Order holdDurationSec must be positive, but was " + holdDurationSec);
+        }
+
+        Instant reservedAt = Instant.now();
+        return create(id, orderCode, userId, eventId, reservedAt,
+                reservedAt.plusSeconds(holdDurationSec));
+    }
+
+    /**
+     * Opens an order using the reservation's captured timestamps. The worker uses this overload so
+     * the PostgreSQL row preserves the exact Redis intent snapshot rather than recalculating a new
+     * deadline a few milliseconds later.
+     */
+    public static Order create(UUID id, String orderCode, UUID userId, UUID eventId,
+                               Instant reservedAt, Instant expiresAt) {
+        requireOrderId(id);
         if (orderCode == null || orderCode.isBlank()) {
             throw new InvalidOrderDataException("Order orderCode must not be blank");
         }
@@ -82,22 +119,27 @@ public class Order {
         if (eventId == null) {
             throw new InvalidOrderDataException("Order eventId must not be null");
         }
-        if (holdDurationSec <= 0) {
-            throw new InvalidOrderDataException(
-                    "Order holdDurationSec must be positive, but was " + holdDurationSec);
+        if (reservedAt == null) {
+            throw new InvalidOrderDataException("Order reservedAt must not be null");
+        }
+        if (expiresAt == null) {
+            throw new InvalidOrderDataException("Order expiresAt must not be null");
+        }
+        if (!reservedAt.isBefore(expiresAt)) {
+            throw new InvalidOrderDataException("Order reservedAt must be before expiresAt");
         }
 
         Instant now = Instant.now();
         return Order.builder()
-                .id(UuidV7Generator.generate())
+                .id(id)
                 .orderCode(orderCode)
                 .userId(userId)
                 .eventId(eventId)
                 .status(OrderStatus.PENDING_PAYMENT)
                 .totalAmount(Money.zero())
                 .items(new ArrayList<>())
-                .reservedAt(now)
-                .expiresAt(now.plusSeconds(holdDurationSec))
+                .reservedAt(reservedAt)
+                .expiresAt(expiresAt)
                 .paidAt(null)
                 .createdAt(now)
                 .updatedAt(now)
@@ -248,6 +290,15 @@ public class Order {
     private static void requireNotNull(Object value, String fieldName) {
         if (value == null) {
             throw new InvalidOrderDataException("Order " + fieldName + " must not be null");
+        }
+    }
+
+    private static void requireOrderId(UUID id) {
+        if (id == null) {
+            throw new InvalidOrderDataException("Order id must not be null");
+        }
+        if (id.version() != 7) {
+            throw new InvalidOrderDataException("Order id must be a UUIDv7");
         }
     }
 }
