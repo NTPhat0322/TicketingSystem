@@ -1,6 +1,6 @@
 # Plan: Ticket purchase and asynchronous reservation
 
-Status: In progress (Phase 1 complete; awaiting approval for Phase 2)
+Status: Complete
 Date: 2026-09-25
 Mode: Hard
 Test: default
@@ -90,13 +90,13 @@ This is the smallest design that keeps the user's chosen `CREATING` flow recover
 ## Phase Order
 
 - [x] Phase 1: Runtime dependencies, Docker services, and integration-test foundation
-- [ ] Phase 2: Domain/application reservation contracts and Order status API model
-- [ ] Phase 3: Redis Lua reservation, Hash/Sorted Set intent store, and cache warming
-- [ ] Phase 4: PostgreSQL Order/Payment/Ticket/Outbox persistence
-- [ ] Phase 5: RabbitMQ relay, Order worker, reservation/status REST flow
-- [ ] Phase 6: TTL/DLX expiry, idempotent release, and reconciliation
-- [ ] Phase 7: Payment initiation/callback, ticket issuance, and Outbox publisher
-- [ ] Phase 8: Full Docker-backed E2E, concurrency, and failure verification
+- [x] Phase 2: Domain/application reservation contracts and Order status API model
+- [x] Phase 3: Redis Lua reservation, Hash/Sorted Set intent store, and cache warming
+- [x] Phase 4: PostgreSQL Order/Payment/Ticket/Outbox persistence
+- [x] Phase 5: RabbitMQ relay, Order worker, reservation/status REST flow
+- [x] Phase 6: TTL/DLX expiry, idempotent release, and reconciliation
+- [x] Phase 7: Payment initiation/callback, ticket issuance, and Outbox publisher
+- [x] Phase 8: Full Docker-backed E2E, concurrency, and failure verification
 
 ## P1 Story Coverage
 
@@ -154,26 +154,188 @@ Use $ck-cook --hard plans/ticket-purchase-hold/plan.md
 
 ## Session Notes
 <!-- Updated by ck-cook; keep this section resumable. -->
-**Last active:** 2026-09-25 15:00
-**Phase in progress:** phase-01-runtime-and-test-foundation
-**Status:** Phase 1 implementation and verification complete; Hard mode is waiting for explicit approval before Phase 2.
+**Last active:** 2026-10-07
+**Phase in progress:** none (feature complete)
+**Status:** Phase 8 was explicitly approved by the user on 2026-10-07; the phase checklist and feature plan are finalized.
 
-### Decisions made this session
-- Added Spring Data Redis and Spring AMQP only to `infrastructure`; domain/application remain free of broker/cache imports.
-- Added durable Redis/RabbitMQ Compose services and a durable order-create plus TTL/DLX topology.
-- Made host ports configurable because this machine already runs another PostgreSQL/Redis/RabbitMQ stack; the verification run used `5433`, `6380`, `5673`, `15673`, and app `8081` while container-internal ports stayed unchanged.
-- Added the missing Lombok annotation processor configuration to `domain/pom.xml`; this was required for the existing domain source to compile.
+### Phase 8 Decisions
+- Added a full Spring/MockMvc lifecycle test backed by real PostgreSQL, Redis, and RabbitMQ containers; it covers immediate `CREATING`, worker transition, local payment callback, ticket issuance, and callback idempotency.
+- Added HTTP concurrency coverage (30 requests against stock 6) and observed non-negative stock after each reservation, Rabbit duplicate-delivery coverage, retry after publish failure, expiry/payment race coverage, and recovery after a failed Redis release via reconciliation.
+- Consumer beans now require explicit `ticketing.messaging.consumers-enabled=true`; the bootstrap default remains enabled, while infrastructure-only contexts do not instantiate consumers unless their application use cases are provided.
+- User approved finalizing Phase 8 on 2026-10-07; Phase 8 is checked off and the feature plan is complete.
 
-### Verification
-- `./mvnw.cmd -pl domain -am test` — pass, 222 tests.
-- `./mvnw.cmd -pl infrastructure -am test` — pass, 222 domain + 59 application + 30 infrastructure tests; real PostgreSQL, Redis, and RabbitMQ containers used.
-- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass, 222 domain + 59 application + 30 infrastructure + 80 presentation + 9 bootstrap tests.
-- `docker compose up -d --build` — pass with the documented host-port overrides; DB, Redis, and RabbitMQ healthy.
-- `GET http://localhost:8081/v3/api-docs` — HTTP 200.
+### Phase 8 Verification
+- Targeted full-stack E2E: 6 tests passed with PostgreSQL, Redis, RabbitMQ, Spring HTTP/security, and generated OpenAPI.
+- Targeted infrastructure messaging/topology tests: 5 tests passed, including order worker, TTL/DLX expiry, and durable Rabbit queue behavior.
+- Full reactor `./mvnw.cmd -q test`: 506 tests, 0 failures, 0 errors, 0 skipped across 95 Surefire reports.
+- `docker compose up -d --build`: passed. App, PostgreSQL, Redis, and RabbitMQ are running; the three dependency services report healthy.
+- Live `curl.exe` checks: `/v3/api-docs` returned HTTP 200 with `bearerAuth` (`http`/`bearer`) and all three order/payment routes; public `GET /api/v1/events` returned HTTP 200.
+- Domain framework-import scan and high-confidence raw-secret signature scan had no matches. Local `.env` is ignored and not tracked; `.env.example` remains the tracked template.
+- `git diff --check` passed; Git emitted only the existing LF/CRLF conversion warnings.
 
-### Review
-- `code-review` verdict: APPROVED. No actionable findings remain in the Phase 1 diff.
-- Residual risk is intentionally deferred to later phases: reservation Lua correctness, relay retry/claim behavior, Order idempotency, expiry/payment race, and concurrency invariants are not implemented or tested yet.
+### Phase 8 Error Report
+1. Docker Engine was initially unavailable (`dockerDesktopLinuxEngine` pipe missing). Docker Desktop was started; Testcontainers and Compose then connected successfully.
+2. Early E2E setup failed because `ObjectMapper` was not a Spring bean; the test now creates its own mapper.
+3. The fixture tried `DRAFT -> ON_SALE`; Event is now published before the approved start-sale action.
+4. Rabbit publisher-confirm testing initially failed with `Confirms not selected`; correlated confirms are explicitly configured for the E2E context.
+5. The first E2E run stayed at `CREATING`: scanned consumers were suppressed by `@ConditionalOnBean` ordering. Explicit consumer configuration replaced that fragile condition, and bootstrap confirms the listener/job beans exist.
+6. Bootstrap tests lacked queue-name placeholders; test queue defaults were added. The first full reactor run then reported 11 infrastructure context errors because listeners were enabled when their application use cases were absent. Making consumers opt-in by property fixed startup; worker integration fixtures now explicitly enable consumers and provide the expiry use case. That exposed three worker timeouts (consumers were not enabled in those fixtures) and one smoke assertion reading an earlier Rabbit message; explicit test enablement and queue purge fixed them.
+7. The first E2E class run had two outbox assertion failures and one Redis-release recovery timeout. `PAYMENT_SUCCESS` is keyed by Payment aggregate, so the assertion now matches the event payload's order ID. RabbitMQ rejects the injected expiry-listener exception rather than automatically redelivering it, so the test now invokes and verifies the designed reconciliation repair.
+8. The first complete reactor run exposed an unpurged Rabbit queue: the topology smoke test consumed an earlier test message. It now purges the queue before sending its own marker; the targeted tests and full reactor pass afterward.
+9. A standalone `-pl infrastructure` Maven invocation could not resolve reactor-local modules; rerunning with `-am` passed. PowerShell brace syntax, `ConvertFrom-Json -Depth`, and `Invoke-WebRequest` caused command-shell errors; compatible commands and `curl.exe` verified the live endpoints.
+10. The green suite still logs deliberate fault/duplicate cases: the injected Redis release and Rabbit publish failures, malformed expiry-message rejection, and duplicate-registration unique-key race. Each is asserted by its test; no test failure remains.
 
-### Next immediate action
-Run the fresh `code-review` skill against the Phase 1 diff, report findings, then wait for explicit user approval before starting Phase 2.
+### Phase 8 Review
+- `code-review` verdict: **APPROVED**; review identified that concurrency coverage asserted the final stock but not the minimum stock observed after each reserve. Added that invariant to the failure-injection test adapter and reran the full reactor; no actionable findings remain.
+- Residual risk: payment-provider signatures and production Redis HA/cluster configuration remain intentionally deferred by the approved MVP scope.
+
+### Phase 8 Completion
+- Phase 8 and the overall feature plan were marked complete after the user's approval on 2026-10-07.
+
+### Phase 7 Decisions
+- Kept the confirmed three-endpoint REST contract: `POST /api/v1/orders`, `GET /api/v1/orders/{orderId}`, and `POST /api/v1/payments/callback`.
+- Used the deterministic `LOCAL` payment adapter first. The Order worker opens one `PENDING` Payment in the same PostgreSQL transaction as Order creation, and polling exposes its provider/reference/status; no fourth initiation endpoint was added.
+- Kept callback authorization provider-neutral for the MVP. The callback resolves the persisted Payment by `transactionRef` and validates the stored owner, provider, and amount; real provider signatures/authentication are deferred.
+- Locked Payment, Order, and TicketType before applying the success transition. Only success changes `sold_quantity`, issues Tickets, and records `PAYMENT_SUCCESS`.
+- Failure changes Payment/Order in PostgreSQL first, then releases Redis. Success marks the reservation intent completed and deletes only the short-lived hold, retaining the purchased user-limit counter.
+- Outbox messages are durable and published with RabbitMQ confirms; a failed publish returns the row to retryable `PENDING` state. Future consumers must deduplicate at-least-once delivery by event id/business key.
+
+### Phase 7 Verification
+- Focused payment, Order-worker, polling, MockMvc, Redis, PostgreSQL, concurrency, RabbitMQ, and bootstrap API tests passed.
+- Full reactor `./mvnw.cmd -q test`: 500 tests, 0 failures, 0 errors, 0 skipped.
+- Docker rebuild/runtime passed: db, redis, rabbitmq, and app are up/healthy; live `/v3/api-docs` returned HTTP 200 with payment callback and bearer security metadata.
+- `git diff --check` reported no whitespace errors; only Windows LF/CRLF conversion warnings.
+
+### Phase 7 Error Report
+1. An unquoted PowerShell Maven `-D` argument was parsed as a lifecycle phase; quoting it fixed the targeted test command.
+2. Payment unit fixtures used UUIDv4 although the Order domain requires UUIDv7; the helper was corrected and the suite passed.
+3. A replay fixture used a one-ticket amount for a two-ticket Order; it now uses the persisted Order total and passes.
+4. The first full Outbox Rabbit assertion expected one row but the shared Testcontainer contained seven pending rows. The relay behavior was correct; the test now matches its own event id and full verification passes.
+5. Review found no production caller for payment initiation; the Order worker now creates the local Payment transactionally and polling exposes the reference.
+6. Review found initiation could return a pending attempt for an expired Order; terminal/inconsistent states are now rejected with regression coverage.
+7. Only non-blocking Mockito/Byte Buddy, Hibernate, Spring Data Redis, negative-message, and concurrency duplicate-key warnings remain. No final test/runtime failure remains.
+
+### Phase 7 Review
+- `code-review` verdict: **APPROVED**; no actionable findings remain for transaction boundaries, authorization, idempotency, Redis cleanup, Outbox retry, API metadata, or tests.
+
+### Phase 7 Next immediate action
+Completed: the user explicitly approved starting Phase 8 on 2026-09-28.
+
+### Phase 6 Decisions
+- Kept RabbitMQ as the expiry signal: the relay publishes a versioned expiry message with per-message TTL, the delay queue dead-letters to the expiry queue, and the listener rechecks the persisted deadline.
+- Split expiry into a transactional PostgreSQL transition and a post-commit Redis release. Only `PENDING_PAYMENT -> EXPIRED` authorizes normal release; `PAID` is never released.
+- Retained Redis reservation intents beyond the short hold TTL and added `enqueuedAt`, `COMPLETED`, bounded grace, and reconciliation batch settings so missing Orders and release failures remain repairable.
+- Reused the relay claim/lease mechanism for reconciliation. The reconciliation job is internal/scheduled only; no unrestricted diagnostic endpoint was added.
+- Added a terminal-state guard so stale relay retries cannot move `COMPLETED` intents back to `PENDING`; removed an unused stock-cache dependency from the reconciliation job wiring.
+
+### Phase 6 Verification
+- Focused post-review verification: `RedisReservationAdapterIntegrationTest` and `ReservationReconciliationJobTest` passed, 12 tests total.
+- Full reactor: `./mvnw.cmd -pl bootstrap -am '-Dsurefire.failIfNoSpecifiedTests=false' test` — pass, 485 tests, 0 failures, 0 errors, 0 skipped.
+- Infrastructure suite: 73 tests, including real PostgreSQL/Redis/RabbitMQ expiry and topology tests.
+- Real TTL/DLX tests passed for unpaid expiry/release-once and payment-winning/no-release paths.
+- Docker rebuild and runtime check passed; all four services healthy and live `/v3/api-docs` returned HTTP 200 after startup.
+- `git diff --check` — no whitespace errors; only LF/CRLF conversion warnings.
+
+### Phase 6 Error Report
+1. The first guessed phase-document filename did not exist; the actual `phase-06-expiry-and-reconciliation.md` was used.
+2. `OrderExpiryPublisher` initially failed Spring startup with `BeanCreationException: No default constructor found`; explicit `@Autowired` constructor wiring fixed it.
+3. `ReservationReconciliationJob` had the same constructor-wiring failure; explicit `@Autowired` wiring fixed it.
+4. The payment-winning TTL assertion ran before the expiry consumer finished and observed `ORDER_CREATED` instead of `COMPLETED`; it now waits for eventual completion and still verifies no release/expiry event.
+5. Review found a stale retry could reschedule `COMPLETED`; the Lua guard and regression test now prevent that transition.
+6. The first live OpenAPI request after app recreation raced readiness and the connection closed; a readiness retry returned HTTP 200.
+7. Expected non-blocking warnings remained: Mockito/Byte Buddy, Hibernate schema/open-in-view, Spring Data Redis repository-assignment messages, malformed-message negative-test logs, and duplicate-key logs from passing concurrency tests. No final test or runtime failure remains.
+
+### Phase 6 Review
+- `code-review` verdict: **APPROVED**; no actionable findings remain.
+
+### Phase 6 Next immediate action
+Wait for explicit user approval before starting Phase 7: local/test payment initiation and callback, ticket issuance, and Outbox publishing.
+
+### Phase 5 Decisions
+- Kept the selected Redis Hash + Sorted Set intent design and added a scheduled relay with a short claim lease, publisher confirms, and bounded retry backoff.
+- Used a version-1 RabbitMQ order-create message carrying the reservation snapshot, including the preassigned `orderId`, price, and expiry timestamps.
+- Made the Order worker transactional and idempotent by `orderId`; it creates exactly one Order, one OrderItem, and one `ORDER_CREATED` OutboxEvent without changing `sold_quantity`.
+- Chose manual Rabbit acknowledgement after the worker transaction returns, with duplicate deliveries treated as successful no-ops.
+- Exposed authenticated `POST /api/v1/orders` returning `202 CREATING` and owner-checked `GET /api/v1/orders/{orderId}` for polling.
+
+### Phase 5 Verification
+- Full reactor: `./mvnw.cmd -pl bootstrap -am '-Dsurefire.failIfNoSpecifiedTests=false' test` — pass, 463 tests, 0 failures, 0 errors, 0 skipped.
+- Infrastructure suite: `./mvnw.cmd -pl infrastructure -am '-Dsurefire.failIfNoSpecifiedTests=false' test` — pass, 65 tests.
+- Redis/Rabbit/PostgreSQL flow: targeted topology, adapter, and order-flow integration tests — pass, 12 tests.
+- Docker runtime: `docker compose up -d --build` — pass; PostgreSQL, Redis, RabbitMQ, and app healthy.
+- Live OpenAPI: `GET http://localhost:8080/v3/api-docs` — `200`; both Order endpoints expose `bearerAuth`.
+- `git diff --check` — pass; only Git line-ending conversion warnings were reported.
+
+### Phase 5 Error Report
+1. The initial phase filename and a few source paths were guessed incorrectly; the existing names were located and used without changing scope.
+2. A Maven module-only dependency-tree command failed because upstream reactor modules were omitted; rerunning with `-am` fixed it.
+3. An early parallel test attempt caused class-loading races between shared Maven target directories; tests were rerun sequentially.
+4. The first integration context missed messaging queue properties; the test application configuration was completed.
+5. The relay initially lacked an explicit constructor injection marker, then failed against a smoke context with messaging disabled; `@Autowired` and combined enable conditions fixed both cases.
+6. An initial Awaitility assertion read an empty polling result too early; it was changed to assert presence before inspecting the value.
+7. The Redis TTL test was affected by the relay scheduler running in an adapter-only context; relay is now disabled by default in that test configuration and enabled only for the order-flow integration test.
+8. The first live OpenAPI request arrived during application startup and the connection closed; a readiness retry succeeded with HTTP 200. Startup also emits expected Hibernate schema warnings for missing constraints and the standard `open-in-view` warning.
+9. Expected non-blocking test/runtime warnings remain: Mockito/Byte Buddy dynamic-agent warnings, Hibernate SQL logs, and malformed-message rejection logs in the negative listener test. No test failure remains.
+
+### Phase 5 Review
+- `code-review` verdict: **APPROVED**; no actionable findings remain for the relay, worker, API, configuration, or tests.
+- Residual scope is intentionally deferred to Phase 6: TTL/DLX expiry handling, idempotent stock release, and reconciliation for stuck intents/messages.
+
+### Phase 5 Next immediate action (historical)
+Wait for explicit user approval before starting Phase 6: TTL/DLX expiry, idempotent release, and reconciliation.
+
+### Phase 4 Decisions
+- Added infrastructure-only JPA entities for Order/OrderItem, Payment, Ticket, and OutboxEvent; domain objects remain persistence-agnostic.
+- Enforced database uniqueness for order code, payment order/transaction references, and ticket code, plus cascading OrderItem deletion.
+- Used `PESSIMISTIC_WRITE` for state-transition reads and `Propagation.MANDATORY` so payment/expiry callers must hold the lock in one transaction.
+- Used `FOR UPDATE SKIP LOCKED` for concurrent Outbox publishers; the caller must keep the transaction open through publish and status update.
+- Accounted for PostgreSQL microsecond timestamp precision in integration assertions.
+
+### Phase 4 Verification
+- `./mvnw.cmd -pl infrastructure -am test` — pass: 227 domain + 75 application + 59 infrastructure tests.
+- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass: 227 domain + 75 application + 59 infrastructure + 80 presentation + 9 bootstrap tests.
+- `git diff --check` — pass; only LF/CRLF conversion warnings were reported.
+
+### Phase 4 Error Report
+1. The first PowerShell targeted-test command failed before Maven because the comma-separated `-Dtest` value was not quoted. Quoting the argument fixed it.
+2. Three timestamp equality assertions failed because PostgreSQL `timestamp(6)` truncates/rounds to microseconds while `Instant.now()` can contain nanoseconds. Assertions now use a two-microsecond tolerance; tests pass.
+3. An intermediate AssertJ fix did not compile because `Instant` assertions require `TemporalOffset`, not `Duration`. Replaced it with `within(2, ChronoUnit.MICROS)`; tests pass.
+
+### Phase 4 Review
+- `code-review` verdict: **APPROVED**; no actionable findings remain.
+- Later phases still need to wire the RabbitMQ relay/worker, expiry/payment orchestration, callback, ticket issuance, and final E2E/failure tests.
+
+### Phase 4 Next immediate action (historical)
+Wait for explicit user approval before starting Phase 5: RabbitMQ relay, Order worker, and reservation/status REST flow.
+
+### Phase 3 Decisions (historical)
+- Added `ReservationIntentStore` as the adapter-neutral relay/reconciliation port for due reads, claim leases, retry scheduling, and terminal state transitions.
+- Used Redis Hashes as the intent/hold records and `reservation:pending` as the retry index; timestamps and amounts use explicit String serialization, with epoch-millis only for Sorted Set scores.
+- Made the reserve Lua script create stock/user-counter changes, the short hold, the long-lived intent, and the pending index in one atomic execution.
+- Made release use the intent's `holdState` as its idempotency marker, so it still restores inventory after the short hold Hash expires and never restores twice.
+- Kept cache warming in the already-approved `StartSaleUseCase`; `warmUp` uses set-if-absent and refuses to overwrite live stock.
+
+### Phase 3 Verification (historical)
+- `./mvnw.cmd -pl infrastructure -am -Dtest=RedisReservationAdapterIntegrationTest '-Dsurefire.failIfNoSpecifiedTests=false' test` — pass, 9 Redis integration tests; Docker-backed Redis 7, RabbitMQ 4, and PostgreSQL 16 started by Testcontainers.
+- `./mvnw.cmd -pl infrastructure -am test` — pass, 227 domain + 75 application + 39 infrastructure tests.
+- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass, 227 domain + 75 application + 39 infrastructure + 80 presentation + 9 bootstrap tests.
+- `git diff --check` — pass before the final checklist-only edits; no code whitespace errors were introduced afterward.
+
+### Phase 3 Review (historical)
+- `code-review` verdict: APPROVED. No actionable findings remain in the Phase 3 adapter, scripts, port, or tests.
+- Residual risk is intentionally deferred to later phases: Rabbit publisher confirms/worker idempotency, PostgreSQL Order persistence, expiry/payment race, API wiring, and production Redis HA/cluster slot behavior.
+
+### Phase 3 Next immediate action (historical)
+Wait for explicit user approval before starting Phase 4: PostgreSQL Order, Payment, Ticket, and Outbox persistence.
+
+### Phase 2 Verification (historical)
+- `./mvnw.cmd -pl domain,application -am test` — pass, 227 domain + 75 application tests.
+- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass, 227 domain + 75 application + 30 infrastructure + 80 presentation + 9 bootstrap tests.
+- `git diff --check` — pass.
+
+### Phase 2 Review (historical)
+- `code-review` verdict: APPROVED. No actionable findings remain in the Phase 2 diff.
+- Residual risk is intentionally deferred to later phases: Redis Lua correctness, relay retry/claim behavior, Order persistence/idempotency, expiry/payment race, API wiring, and concurrency invariants are not implemented or tested yet.
+
+### Phase 2 Next immediate action (historical)
+Wait for explicit user approval before starting Phase 3: Redis Lua reservation, Hash/Sorted Set intent storage, release script, and cache warming adapter.

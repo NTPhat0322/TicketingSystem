@@ -63,3 +63,19 @@ If the port shape proves wrong, keep the application records and revert only the
 ## Risks
 
 - The existing `StockCachePort` is named as a stock port but now spans the atomic reservation boundary. If that becomes too broad during implementation, split the intent read/update operations into an application-owned port while keeping the single Redis Lua reserve operation intact.
+
+## Checklist
+
+- [x] Add explicit UUIDv7 Order identity and preserve captured reservation timestamps.
+- [x] Define adapter-neutral reservation request, intent, intent state, and status-port contracts.
+- [x] Evolve `StockCachePort` so reserve carries the full snapshot and release has an `orderId` idempotency key.
+- [x] Implement reservation, polling, and explicit start-sale application use cases.
+- [x] Add business exceptions for sale availability, stock warm-up, user limits, sold-out inventory, and missing orders.
+- [x] Add domain/application unit tests for identity propagation, snapshots, ownership, CREATING mapping, and warm-before-start ordering.
+
+## Verification Evidence
+
+- `./mvnw.cmd -pl domain,application -am test` — pass: 227 domain tests and 75 application tests.
+- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass: 400 tests across all modules.
+- `git diff --check` — pass.
+- Domain/application source contains no Redis, RabbitMQ, Jackson, or persistence imports.

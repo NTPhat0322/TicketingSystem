@@ -26,6 +26,16 @@ No HTTP story is completed alone, but this phase supplies the durable records re
 4. Add lock-aware repository methods for payment callback and expiry races. Use pessimistic row locking or conditional updates; do not rely on an unconstrained read-modify-write sequence.
 5. Implement `OutboxEventRepository.findAllPending` with a safe multi-publisher strategy (`FOR UPDATE SKIP LOCKED` or an equivalent claim operation) at the infrastructure boundary.
 
+## Checklist
+
+- [x] Add JPA entities for `Order`/`OrderItem`, `Payment`, `Ticket`, and `OutboxEvent`.
+- [x] Add MapStruct persistence mappers that reconstruct domain objects through `reconstitute(...)` and preserve `Money`, status, timestamps, and child relationships.
+- [x] Add repository adapters and constraints for unique order codes, payment order/transaction references, ticket codes, and cascading order items.
+- [x] Add pessimistic lock methods for Order, Payment, and TicketType with an explicit `Propagation.MANDATORY` transaction contract.
+- [x] Add Outbox pending lookup with `FOR UPDATE SKIP LOCKED` and require the caller to keep the transaction open through publish/mark.
+- [x] Add PostgreSQL Testcontainers tests for round trips, constraints, cascade deletion, payment/expiry locking, and concurrent Outbox claiming.
+- [x] Keep domain free of persistence/framework imports.
+
 ## Implementation Steps
 
 1. Create entities and schema mappings, starting with Order/OrderItem because the worker needs them first.
@@ -64,4 +74,26 @@ If schema generation or mappings fail, keep the new entities/adapters isolated f
 
 - The project is code-first with `ddl-auto: update`; a future migration system may need to replace these mappings. Record generated schema assumptions in tests rather than hiding them in manual SQL.
 - Assigned UUID IDs can cause Spring Data to choose merge semantics; functional correctness is the priority for this phase, not premature insert-path optimization.
+
+## Verification Evidence
+
+- `./mvnw.cmd -pl infrastructure -am -DskipTests compile` — pass.
+- Targeted Phase 4 persistence tests — pass: 20 tests after the final transaction-lock contract adjustment.
+- `./mvnw.cmd -pl infrastructure -am test` — pass: 227 domain + 75 application + 59 infrastructure tests.
+- `./mvnw.cmd -pl bootstrap -am test '-Dsurefire.failIfNoSpecifiedTests=false'` — pass: 227 domain + 75 application + 59 infrastructure + 80 presentation + 9 bootstrap tests.
+- `git diff --check` — pass; Git only reported the repository's existing LF/CRLF conversion warnings.
+
+## Errors Encountered and Resolutions
+
+1. PowerShell parsed the comma-separated `-Dtest` value as a command expression, so Maven never started. The fix was to quote the Maven system-property argument: `'-Dtest=...'`. The targeted suite then ran successfully.
+2. Three repository tests initially compared nanosecond `Instant` values exactly, while PostgreSQL `timestamp(6)` stores microsecond precision. The fix was to assert timestamps within two microseconds; the final targeted and full suites passed.
+3. The first timestamp assertion fix used AssertJ `Duration`, but the `Instant` assertion overload requires a `TemporalOffset`. The fix was `within(2, ChronoUnit.MICROS)`; compilation and all tests then passed.
+
+Expected duplicate-key SQL warnings in constraint tests and Hibernate's first-run `constraint ... does not exist, skipping` messages are intentional schema/test setup output, not unresolved failures.
+
+## Review
+
+- `code-review` verdict: **APPROVED**.
+- No actionable findings remain for Phase 4.
+- Residual work is intentionally deferred to later phases: RabbitMQ relay/worker idempotency, expiry/payment business orchestration, payment callback, ticket issuance, and the final Docker-backed E2E flow.
 

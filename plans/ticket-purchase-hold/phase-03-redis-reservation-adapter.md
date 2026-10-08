@@ -6,6 +6,15 @@
 - Durable pending intent for asynchronous creation.
 - Atomic, idempotent release foundation for expiry and reconciliation.
 
+## Checklist
+
+- [x] Atomic Lua reservation checks stock and per-user limit, then writes stock, user counter, hold, intent, and pending index together.
+- [x] Idempotent Lua release restores stock and user allowance once and keeps the intent record for inspection.
+- [x] Due intent reads load ids from the Sorted Set and payloads from Hashes.
+- [x] Retry, enqueue confirmation, Order-created, expiry, release, and short claim/lease operations are implemented.
+- [x] Start-sale cache warming seeds every TicketType before the Event becomes `ON_SALE`; missing stock never warms on demand.
+- [x] Redis Testcontainers cover serialization, missing warm-up, TTL/recovery separation, state transitions, release replay, and concurrency limits.
+
 ## Affected Areas
 
 - `infrastructure/src/main/java/com/tienphat/infrastructure/redis/`
@@ -29,12 +38,12 @@
 
 ## Implementation Steps
 
-1. Add key builders and field constants in one adapter package.
-2. Add Lua script resources under infrastructure and load them as `DefaultRedisScript` values with explicit result types.
-3. Implement reserve/release/intent operations using `StringRedisTemplate` or an equivalent typed template; use explicit serialization for UUIDs, timestamps, and amounts.
-4. Implement retry scheduling with `ZADD` and completion cleanup with `ZREM`; only remove a due member after the caller has a confirmed publish or terminal release.
-5. Add a short Redis claim/lease per order for multiple relay instances; keep idempotent duplicate handling as the correctness backstop.
-6. Add warm-up service and tests that prove an unwarmed key fails closed and a warm-up before holds seeds exactly `totalQuantity`.
+1. [x] Add key builders and field constants in one adapter package.
+2. [x] Add Lua script resources under infrastructure and load them as `DefaultRedisScript` values with explicit result types.
+3. [x] Implement reserve/release/intent operations using `StringRedisTemplate` or an equivalent typed template; use explicit serialization for UUIDs, timestamps, and amounts.
+4. [x] Implement retry scheduling with `ZADD` and completion cleanup with `ZREM`; only remove a due member after the caller has a confirmed publish or terminal release.
+5. [x] Add a short Redis claim/lease per order for multiple relay instances; keep idempotent duplicate handling as the correctness backstop.
+6. [x] Add warm-up service and tests that prove an unwarmed key fails closed and a warm-up before holds seeds exactly `totalQuantity`.
 
 ## Invariants
 
@@ -46,11 +55,11 @@
 
 ## Success Criteria
 
-- A real Redis integration test with concurrent callers accepts no more than the warmed stock quantity and never produces a negative stock value.
-- A max-per-user concurrency test accepts no more than the configured user limit.
-- Replaying the release script returns success only once and leaves final stock/counter values correct.
-- A forced application interruption after the Lua call leaves a discoverable intent in the Hash/Sorted Set.
-- A missing stock key produces a fail-closed business result and no intent.
+- [x] A real Redis integration test with concurrent callers accepts no more than the warmed stock quantity and never produces a negative stock value.
+- [x] A max-per-user concurrency test accepts no more than the configured user limit.
+- [x] Replaying the release script returns success only once and leaves final stock/counter values correct.
+- [x] A caller returning immediately after the Lua call leaves a discoverable intent in the Hash/Sorted Set, covering the crash window before relay publication.
+- [x] A missing stock key produces a fail-closed business result and no intent.
 
 ## Test Strategy
 

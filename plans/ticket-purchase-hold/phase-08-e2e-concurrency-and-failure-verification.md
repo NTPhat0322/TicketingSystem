@@ -62,3 +62,11 @@ If a full-stack test exposes a design defect, stop before modifying production c
 - Three-container tests are slower and Docker-dependent; retain focused unit tests so failures remain diagnosable.
 - Timing-based TTL tests can be flaky; use broker confirmation, persisted deadlines, polling with bounded timeouts, and a test-only short delay rather than exact sleep assertions.
 
+## Execution Evidence (2026-09-28)
+
+- Full lifecycle, HTTP stock contention (including non-negative post-reservation stock observations), publish retry, expiry/reconciliation failure recovery, payment-vs-TTL race, duplicate callback, and OpenAPI/security tests passed against real PostgreSQL, Redis, and RabbitMQ containers.
+- Full reactor: 506 tests, 0 failures, 0 errors, 0 skipped. Compose rebuild and live API/OpenAPI checks passed.
+- Domain framework-import scan and high-confidence raw-secret signature scan returned no matches; local `.env` is ignored and untracked.
+- The detailed error/fix log and fresh review verdict are recorded under Phase 8 in `plan.md` Session Notes.
+- User approved Phase 8 on 2026-10-07; the phase checklist and feature plan are finalized.
+
