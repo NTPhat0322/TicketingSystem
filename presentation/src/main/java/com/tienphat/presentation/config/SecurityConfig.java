@@ -88,6 +88,8 @@ public class SecurityConfig {
                                 "/api/v1/ticket-types",
                                 "/api/v1/ticket-types/**"
                         ).authenticated()
+                        .requestMatchers("/api/v1/orders/**").authenticated()
+                        .requestMatchers("/api/v1/payments/**").authenticated()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));

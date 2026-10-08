@@ -10,10 +10,12 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(classes = InfrastructureTestApplication.class)
+@TestPropertySource(properties = "ticketing.messaging.consumers-enabled=false")
 class RedisRabbitTopologySmokeTest extends AbstractRedisRabbitIntegrationTest {
 
     @Autowired
@@ -35,6 +37,7 @@ class RedisRabbitTopologySmokeTest extends AbstractRedisRabbitIntegrationTest {
     @Test
     void declaresAndUsesDurableOrderTopologyOnRealRabbitMq() {
         assertThat(amqpAdmin.getQueueProperties(RabbitTopologyConfig.ORDER_CREATE_QUEUE)).isNotNull();
+        amqpAdmin.purgeQueue(RabbitTopologyConfig.ORDER_CREATE_QUEUE);
 
         rabbitTemplate.convertAndSend(
                 RabbitTopologyConfig.ORDER_EXCHANGE,

@@ -13,6 +13,7 @@ import java.util.UUID;
 public record AuthorizationContext(UUID userId, UserRole role) {
 
     public void requireCanCreate() {
+        requireAuthenticated();
         if (role != UserRole.ADMIN && role != UserRole.ORGANIZER) {
             throw new ForbiddenOperationException("Only ADMIN or ORGANIZER can perform this operation");
         }
@@ -22,6 +23,19 @@ public record AuthorizationContext(UUID userId, UserRole role) {
         requireCanCreate();
         if (role != UserRole.ADMIN && !userId.equals(ownerId)) {
             throw new ForbiddenOperationException("You do not own this event");
+        }
+    }
+
+    public void requireAuthenticated() {
+        if (userId == null || role == null) {
+            throw new ForbiddenOperationException("An authenticated user is required");
+        }
+    }
+
+    public void requireCanAccess(UUID ownerId) {
+        requireAuthenticated();
+        if (role != UserRole.ADMIN && !userId.equals(ownerId)) {
+            throw new ForbiddenOperationException("You do not own this order");
         }
     }
 }

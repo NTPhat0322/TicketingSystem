@@ -13,3 +13,6 @@ jwt:
 ticketing:
   messaging:
     enabled: false
+    consumers-enabled: false
+    order-create-queue: order.create.queue
+    order-expire-queue: order.expire.queue
