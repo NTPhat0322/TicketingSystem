@@ -2,6 +2,7 @@ package com.tienphat.application.event;
 
 import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.domain.exception.ForbiddenOperationException;
+import com.tienphat.domain.exception.InvalidEventStateException;
 import com.tienphat.domain.model.Event;
 import com.tienphat.domain.model.EventStatus;
 import com.tienphat.domain.model.TicketType;
@@ -99,6 +100,21 @@ class StartSaleUseCaseTest {
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(event.getStatus()).isEqualTo(EventStatus.PUBLISHED);
+        verify(eventRepository, never()).save(any(Event.class));
+    }
+
+    @Test
+    @DisplayName("execute() rejects an already-on-sale event before warming missing Redis stock")
+    void execute_rejectsAlreadyOnSaleEventBeforeWarming() {
+        Event event = aPublishedEvent();
+        event.startSale();
+        when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> useCase.execute(new StartSaleCommand(EVENT_ID, ORGANIZER)))
+                .isInstanceOf(InvalidEventStateException.class);
+
+        verify(stockCachePort, never()).warmUp(any(UUID.class), any(Integer.class));
+        verify(ticketTypeRepository, never()).findAllByEventId(any(UUID.class));
         verify(eventRepository, never()).save(any(Event.class));
     }
 

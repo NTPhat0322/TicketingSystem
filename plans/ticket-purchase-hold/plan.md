@@ -73,7 +73,7 @@ Test mode?   default. Every phase includes unit/integration tests; strict red-fi
 11. **Fail closed:** missing/unavailable Redis or an unwarmed stock key rejects reservation. There is no PostgreSQL fallback reservation path.
 12. **Cache warming trigger:** the MVP uses an explicit `StartSaleUseCase`. It warms every TicketType for the Event first, then calls `Event.startSale()`. A scheduled job based on `saleStartTime` is a later enhancement.
 13. **Local payment:** the first implementation exposes a provider-neutral payment port and callback contract, backed by a deterministic local/test adapter. VNPAY/MOMO/Stripe credentials, SDKs, and signatures are a later integration.
-14. **REST contract:** the MVP uses `POST /api/v1/orders` for reservation, `GET /api/v1/orders/{orderId}` for polling, and `POST /api/v1/payments/callback` for the provider-neutral callback. The `StartSaleUseCase` is an application action; exposing it as another public endpoint is outside this feature's three-endpoint contract.
+14. **REST contract:** the purchase flow uses `POST /api/v1/orders`, `GET /api/v1/orders/{orderId}`, and `POST /api/v1/payments/callback`. The approved Phase 9 operational additions are `POST /api/v1/events/{id}/start-sale` (ADMIN or owning ORGANIZER) and `POST /api/v1/admin/reservations/relay` (ADMIN only, one bounded due-intent batch). Scheduled relay and its retry/reconciliation paths remain the normal delivery mechanism.
 
 ## Primary and Alternative Approaches
 
@@ -97,6 +97,7 @@ This is the smallest design that keeps the user's chosen `CREATING` flow recover
 - [x] Phase 6: TTL/DLX expiry, idempotent release, and reconciliation
 - [x] Phase 7: Payment initiation/callback, ticket issuance, and Outbox publisher
 - [x] Phase 8: Full Docker-backed E2E, concurrency, and failure verification
+- [x] Phase 9: Start-sale and admin reservation-relay API operations
 
 ## P1 Story Coverage
 
@@ -109,6 +110,8 @@ This is the smallest design that keeps the user's chosen `CREATING` flow recover
 | Idempotent Order worker | Phases 4, 5, 8 |
 | TTL/DLX expiry and one-time release | Phases 3, 6, 8 |
 | Payment success, sold quantity, Tickets, Outbox | Phases 4, 7, 8 |
+| Event manager warms stock and starts sales | Phases 3, 9 |
+| Admin can manually run a due reservation relay batch | Phases 5, 6, 9 |
 
 ## Validation Commands
 
@@ -154,9 +157,37 @@ Use $ck-cook --hard plans/ticket-purchase-hold/plan.md
 
 ## Session Notes
 <!-- Updated by ck-cook; keep this section resumable. -->
-**Last active:** 2026-10-07
-**Phase in progress:** none (feature complete)
-**Status:** Phase 8 was explicitly approved by the user on 2026-10-07; the phase checklist and feature plan are finalized.
+**Last active:** 2026-10-08
+**Phase in progress:** None — Phase 9 complete
+**Status:** Phase 9 implemented and verified; final full-reactor run passed 512 tests.
+
+### Phase 9 Decisions
+- Exposed the existing `StartSaleUseCase` as `POST /api/v1/events/{id}/start-sale`; method security permits ADMIN/ORGANIZER, while the use case enforces organizer ownership and warms inventory before the event transition.
+- Reject an Event that cannot transition to `ON_SALE` before touching Redis. This prevents a repeated start-sale call from reinitializing a missing stock key for an Event that is already selling.
+- Added `POST /api/v1/admin/reservations/relay` for ADMIN only. It triggers exactly one existing bounded relay batch and returns the publisher-confirmed count; scheduled delivery, claims, retries, and reconciliation are unchanged.
+- Kept messaging feature flags aligned: the admin relay route and use case are only wired when messaging and relay are enabled.
+
+### Phase 9 Verification
+- `RunReservationRelayUseCaseTest`: 2 tests passed (ADMIN success and non-admin rejection).
+- Focused start-sale endpoint test: owner succeeds and warms Redis; foreign ORGANIZER and CUSTOMER receive 403.
+- Focused purchase lifecycle: admin relay endpoint publishes one intent, rejects unauthenticated/non-admin callers, and a repeat trigger publishes zero duplicates.
+- Start-sale use-case tests: 4 passed, including rejecting an already-ON_SALE Event before any Redis warm-up.
+- Full Docker-backed lifecycle class: 7 passed.
+- OpenAPI test confirms both new POST routes document Bearer authentication.
+- `./mvnw.cmd -q -pl bootstrap -am "-Dsurefire.failIfNoSpecifiedTests=false" test` — final rerun passed: 512 tests, 0 failures/errors/skips (domain 227, application 100, infrastructure 78, presentation 88, bootstrap 19).
+- `git diff --check` — pass.
+
+### Phase 9 Error Report
+1. The initial red test did not compile because the relay port/use case had not yet been implemented; adding them made the application tests pass.
+2. The first HTTP red test got `404` for `/api/v1/events/{id}/start-sale`; this confirmed the route was absent. Adding the controller mapping and wiring made the endpoint test pass.
+3. The first full-reactor run after adding the route reported 16 `EventControllerTest` context errors: the MVC test slice had no `StartSaleUseCase` bean. Added a `@MockitoBean` for the new controller dependency; the controller tests and final full reactor then passed.
+4. One full-reactor run failed `OrderExpiryMessagingIntegrationTest.ttlExpiryDoesNotReleaseStockAfterPaymentWins` at the stock assertion (expected 2, got 3). The test's two-second Rabbit TTL makes this timing-sensitive; the single test passed in isolation and the subsequent full-reactor rerun passed. No failure remains reproduced; this existing expiry test remains a timing-sensitive check.
+5. Review found that retrying start-sale for an already-`ON_SALE` Event could warm a missing Redis key before the domain rejected the transition. Added a domain precondition before warm-up and a regression test; focused and full tests pass afterward.
+6. Full E2E intentionally logs injected Redis-release/RabbitMQ-publish failures and a malformed expiry message to verify recovery; these are asserted test scenarios, not unresolved runtime failures.
+
+### Phase 9 Review
+- Verdict: **WARNING** — authorization, lifecycle, Redis warming, relay behavior, and OpenAPI checks are covered, with no correctness/security finding remaining in the new routes.
+- Residual operational risk: the admin relay endpoint runs a bounded batch synchronously and waits for RabbitMQ publisher confirms. During broker slowness, the HTTP call can outlive a client/proxy timeout even though scheduled retry remains available. Consider an asynchronous trigger/status contract before using this as a production operations endpoint.
 
 ### Phase 8 Decisions
 - Added a full Spring/MockMvc lifecycle test backed by real PostgreSQL, Redis, and RabbitMQ containers; it covers immediate `CREATING`, worker transition, local payment callback, ticket issuance, and callback idempotency.

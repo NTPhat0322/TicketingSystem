@@ -26,6 +26,13 @@ public record AuthorizationContext(UUID userId, UserRole role) {
         }
     }
 
+    public void requireAdmin() {
+        requireAuthenticated();
+        if (role != UserRole.ADMIN) {
+            throw new ForbiddenOperationException("Only ADMIN can perform this operation");
+        }
+    }
+
     public void requireAuthenticated() {
         if (userId == null || role == null) {
             throw new ForbiddenOperationException("An authenticated user is required");

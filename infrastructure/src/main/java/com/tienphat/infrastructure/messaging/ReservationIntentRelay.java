@@ -2,6 +2,7 @@ package com.tienphat.infrastructure.messaging;
 
 import com.tienphat.domain.port.ReservationIntent;
 import com.tienphat.domain.port.ReservationIntentStore;
+import com.tienphat.application.reservation.ReservationRelayPort;
 import com.tienphat.infrastructure.config.MessagingProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +24,7 @@ import java.util.UUID;
         name = {"enabled", "relay-enabled"},
         havingValue = "true",
         matchIfMissing = true)
-public class ReservationIntentRelay {
+public class ReservationIntentRelay implements ReservationRelayPort {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReservationIntentRelay.class);
 
@@ -98,6 +99,11 @@ public class ReservationIntentRelay {
             }
         }
         return published;
+    }
+
+    @Override
+    public int relayDueReservations() {
+        return relayOnce();
     }
 
     private void reschedule(ReservationIntent intent, RuntimeException exception) {

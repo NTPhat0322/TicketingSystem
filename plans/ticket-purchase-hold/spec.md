@@ -1,7 +1,7 @@
 # Spec: Ticket purchase and asynchronous reservation
 
 **Date:** 2026-09-25
-**Status:** Ready
+**Status:** Implemented and verified (2026-10-08)
 
 ---
 
@@ -34,6 +34,12 @@ The ticketing system must reserve limited ticket inventory safely when many auth
 - **[P1]** As the platform, I want successful payment to finalize a reservation so that the customer receives tickets and inventory accounting is correct.
   Accepted when: a successful payment transaction atomically changes the Payment and Order, increments `sold_quantity` exactly once, creates the Tickets, and records the relevant `OutboxEvent`.
 
+- **[P1]** As an ADMIN or Event-owning ORGANIZER, I want to start ticket sales through the API so that inventory is warmed before reservations are accepted.
+  Accepted when: only ADMIN or the owning ORGANIZER can start sales, every TicketType stock key is warmed first, and a failed warm-up leaves the Event out of `ON_SALE`.
+
+- **[P2]** As an ADMIN, I want to manually trigger one reservation-relay batch so that I can operate or verify due intents without bypassing the normal retry mechanism.
+  Accepted when: only ADMIN can trigger it, the response reports the publisher-confirmed count, and repeat calls do not duplicate an already-enqueued intent.
+
 - **[P2]** As a customer, I want to cancel an unpaid Order manually so that I can release my hold before it expires.
   _(out of scope for the first implementation; use TTL expiry first)_
 
@@ -57,6 +63,8 @@ The ticketing system must reserve limited ticket inventory safely when many auth
 12. **FR-12:** Existing `OutboxEvent` behavior remains PostgreSQL-side. `ORDER_CREATED`, `ORDER_EXPIRED`, and `PAYMENT_SUCCESS` are recorded in the same database transaction as the business state change that produced them; the initial Redis reservation intent is not represented as an OutboxEvent.
 13. **FR-13:** The system must fail closed when Redis is unavailable or the required stock key is missing. It must not fall back to a second reservation algorithm through PostgreSQL.
 14. **FR-14:** The MVP's explicit `StartSaleUseCase` must warm every TicketType stock key for the Event before calling `Event.startSale()`. A scheduled job based on `saleStartTime` is deferred; reservation must still fail closed if the stock key is not warmed.
+15. **FR-15:** `POST /api/v1/events/{id}/start-sale` is restricted to ADMIN/ORGANIZER. ADMIN may manage any Event; ORGANIZER ownership must match the Event. The endpoint delegates all warming/transition rules to `StartSaleUseCase`.
+16. **FR-16:** `POST /api/v1/admin/reservations/relay` is ADMIN-only and runs one configured bounded batch of due intents through the existing claim, publisher-confirm, and retry behavior. Scheduled relay and reconciliation remain enabled as configured and are not replaced by this endpoint.
 
 ---
 
@@ -65,7 +73,7 @@ The ticketing system must reserve limited ticket inventory safely when many auth
 - **Performance:** the reservation endpoint should complete the Redis reservation and return its `202` response with p95 latency below 300 ms under the project's initial concurrency test; Order creation and payment finalization are asynchronous.
 - **Consistency:** accepted reservations must never make the Redis stock value negative; each `orderId` may produce at most one Order and one successful stock release.
 - **Reliability:** RabbitMQ messages and queues are durable; publisher confirms are enabled; the reconciliation job runs at a configurable fixed interval and survives application restarts by reading Redis state.
-- **Security:** only an authenticated user can reserve; `userId` comes from the verified access token, not from an untrusted request field; users cannot poll another user's Order.
+- **Security:** only an authenticated user can reserve; `userId` comes from the verified access token, not from an untrusted request field; users cannot poll another user's Order; start-sale checks role and ownership; manual relay is ADMIN-only.
 - **Observability:** reservation, publish retry, worker duplicate, expiry, release, and reconciliation actions must include `orderId` and `ticketTypeId` in structured logs or equivalent diagnostics.
 
 ---
@@ -104,6 +112,6 @@ The ticketing system must reserve limited ticket inventory safely when many auth
 - The hold duration comes from the TicketType configuration and the reservation intent is retained longer than the short-lived hold metadata so reconciliation can still release stock.
 - Inventory is warmed in Redis by an explicit `StartSaleUseCase` before an Event becomes purchasable. A future scheduled job may invoke the same use case based on `saleStartTime`.
 - The first payment flow uses a deterministic local/test payment adapter; VNPAY/MOMO/Stripe integration is deferred.
-- The first REST contract is `POST /api/v1/orders`, `GET /api/v1/orders/{orderId}`, and `POST /api/v1/payments/callback`.
+- The purchase REST contract is `POST /api/v1/orders`, `GET /api/v1/orders/{orderId}`, and `POST /api/v1/payments/callback`. Operational API additions are `POST /api/v1/events/{id}/start-sale` and ADMIN-only `POST /api/v1/admin/reservations/relay`.
 - The current domain rules remain: `sold_quantity` changes only on successful payment, and `OutboxEvent` is written with the PostgreSQL business transaction.
 - RabbitMQ TTL + DLX is the chosen expiry mechanism for the first implementation.

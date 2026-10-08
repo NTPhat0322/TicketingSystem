@@ -2,9 +2,6 @@ package com.tienphat.ticketingsystem.order;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tienphat.application.auth.AuthorizationContext;
-import com.tienphat.application.event.StartSaleCommand;
-import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.domain.model.Event;
 import com.tienphat.domain.model.EventStatus;
 import com.tienphat.domain.model.PaymentProvider;
@@ -153,9 +150,6 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
     private TicketRepository ticketRepository;
 
     @Autowired
-    private StartSaleUseCase startSaleUseCase;
-
-    @Autowired
     private ReservationIntentRelay reservationIntentRelay;
 
     @Autowired
@@ -214,7 +208,19 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
                 .andExpect(jsonPath("$.status").value("CREATING"));
         assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
 
-        assertThat(reservationIntentRelay.relayOnce()).isEqualTo(1);
+        mockMvc.perform(post("/api/v1/admin/reservations/relay")
+                        .with(jwtFor(fixture.userId(), "CUSTOMER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/reservations/relay"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/admin/reservations/relay")
+                        .with(jwtFor(UUID.randomUUID(), "ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publishedCount").value(1));
+        mockMvc.perform(post("/api/v1/admin/reservations/relay")
+                        .with(jwtFor(UUID.randomUUID(), "ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publishedCount").value(0));
         awaitOrderStatus(orderId, fixture.userId(), "PENDING_PAYMENT");
         MvcResult pending = mockMvc.perform(get("/api/v1/orders/{orderId}", orderId)
                         .with(jwtFor(fixture.userId(), "CUSTOMER")))
@@ -409,6 +415,34 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
     }
 
     @Test
+    void startSaleEndpointEnforcesEventOwnershipAndWarmsInventory() throws Exception {
+        Fixture fixture = prepareUnstartedSale(4, 10, 3600);
+
+        mockMvc.perform(post("/api/v1/events/{eventId}/start-sale", fixture.eventId())
+                        .with(jwtFor(UUID.randomUUID(), "ORGANIZER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/events/{eventId}/start-sale", fixture.eventId())
+                        .with(jwtFor(fixture.userId(), "CUSTOMER")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/events/{eventId}/start-sale", fixture.eventId())
+                        .with(jwtFor(fixture.organizerId(), "ORGANIZER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ON_SALE"));
+
+        assertThat(eventRepository.findById(fixture.eventId()).orElseThrow().getStatus())
+                .isEqualTo(EventStatus.ON_SALE);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(4);
+
+        Fixture adminFixture = prepareUnstartedSale(5, 10, 3600);
+        mockMvc.perform(post("/api/v1/events/{eventId}/start-sale", adminFixture.eventId())
+                        .with(jwtFor(UUID.randomUUID(), "ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ON_SALE"));
+        assertThat(redisReservationAdapter.getAvailableStock(adminFixture.ticketTypeId())).isEqualTo(5);
+    }
+
+    @Test
     void generatedOpenApiDocumentsBearerSecurityForPurchaseRoutes() throws Exception {
         assertThat(applicationContext.getBeansOfType(OrderCreateListener.class)).hasSize(1);
         assertThat(applicationContext.getBeansOfType(OrderExpiryListener.class)).hasSize(1);
@@ -424,9 +458,25 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
                 .isTrue();
         assertThat(hasBearerRequirement(
                 document.at("/paths/~1api~1v1~1payments~1callback/post/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at(
+                "/paths/~1api~1v1~1events~1{id}~1start-sale/post/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at(
+                "/paths/~1api~1v1~1admin~1reservations~1relay/post/security"))).isTrue();
     }
 
-    private Fixture prepareSale(int stock, int maxPerUser, int holdDurationSec) {
+    private Fixture prepareSale(int stock, int maxPerUser, int holdDurationSec) throws Exception {
+        Fixture fixture = prepareUnstartedSale(stock, maxPerUser, holdDurationSec);
+        mockMvc.perform(post("/api/v1/events/{eventId}/start-sale", fixture.eventId())
+                        .with(jwtFor(fixture.organizerId(), "ORGANIZER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ON_SALE"));
+        assertThat(eventRepository.findById(fixture.eventId()).orElseThrow().getStatus())
+                .isEqualTo(EventStatus.ON_SALE);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(stock);
+        return fixture;
+    }
+
+    private Fixture prepareUnstartedSale(int stock, int maxPerUser, int holdDurationSec) {
         UUID userId = UUID.randomUUID();
         UUID organizerId = UUID.randomUUID();
         userRepository.save(User.register(
@@ -468,12 +518,7 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
                 maxPerUser,
                 holdDurationSec));
 
-        startSaleUseCase.execute(new StartSaleCommand(
-                eventId,
-                new AuthorizationContext(organizerId, UserRole.ORGANIZER)));
-        assertThat(eventRepository.findById(eventId).orElseThrow().getStatus()).isEqualTo(EventStatus.ON_SALE);
-        assertThat(redisReservationAdapter.getAvailableStock(ticketTypeId)).isEqualTo(stock);
-        return new Fixture(userId, eventId, ticketTypeId);
+        return new Fixture(userId, organizerId, eventId, ticketTypeId);
     }
 
     private MvcResult reserve(Fixture fixture, UUID userId, int quantity) throws Exception {
@@ -551,7 +596,7 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
                 .authorities(new SimpleGrantedAuthority("ROLE_" + role));
     }
 
-    private record Fixture(UUID userId, UUID eventId, UUID ticketTypeId) {
+    private record Fixture(UUID userId, UUID organizerId, UUID eventId, UUID ticketTypeId) {
     }
 
     @TestConfiguration(proxyBeanMethods = false)

@@ -34,6 +34,8 @@ import com.tienphat.application.payment.UuidTicketCodeGenerator;
 import com.tienphat.application.reservation.ReserveTicketCommand;
 import com.tienphat.application.reservation.ReserveTicketResult;
 import com.tienphat.application.reservation.ReserveTicketUseCase;
+import com.tienphat.application.reservation.ReservationRelayPort;
+import com.tienphat.application.reservation.RunReservationRelayUseCase;
 import com.tienphat.application.tickettype.CreateTicketTypeCommand;
 import com.tienphat.application.tickettype.CreateTicketTypeUseCase;
 import com.tienphat.application.tickettype.DeactivateTicketTypeCommand;
@@ -64,6 +66,7 @@ import com.tienphat.domain.repository.UserRepository;
 import com.tienphat.domain.port.ReservationIntentStatusPort;
 import com.tienphat.domain.port.ReservationIntentStore;
 import com.tienphat.domain.port.StockCachePort;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -129,6 +132,16 @@ public class UseCaseConfig {
             StockCachePort stockCachePort,
             EventMapper eventMapper) {
         return new StartSaleUseCase(eventRepository, ticketTypeRepository, stockCachePort, eventMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "ticketing.messaging",
+            name = {"enabled", "relay-enabled"},
+            havingValue = "true",
+            matchIfMissing = true)
+    public RunReservationRelayUseCase runReservationRelayUseCase(ReservationRelayPort reservationRelayPort) {
+        return new RunReservationRelayUseCase(reservationRelayPort);
     }
 
     @Bean

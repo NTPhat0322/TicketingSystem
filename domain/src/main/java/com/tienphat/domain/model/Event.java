@@ -198,6 +198,11 @@ public class Event {
         transitionTo(EventStatus.ON_SALE);
     }
 
+    /** Validates the sale-start transition without mutating the Event. */
+    public void ensureCanStartSale() {
+        ensureTransitionAllowed(EventStatus.ON_SALE);
+    }
+
     /** {@code ON_SALE → CLOSED}. Terminal — selling is over for good. */
     public void close() {
         transitionTo(EventStatus.CLOSED);
@@ -209,12 +214,16 @@ public class Event {
     }
 
     private void transitionTo(EventStatus target) {
+        ensureTransitionAllowed(target);
+        this.status = target;
+        this.updatedAt = Instant.now();
+    }
+
+    private void ensureTransitionAllowed(EventStatus target) {
         if (!status.canTransitionTo(target)) {
             throw new InvalidEventStateException(
                     "Event cannot move from " + status + " to " + target);
         }
-        this.status = target;
-        this.updatedAt = Instant.now();
     }
 
     private static void requireNotNull(Object value, String fieldName) {

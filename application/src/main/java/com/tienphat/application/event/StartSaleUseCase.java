@@ -39,6 +39,7 @@ public class StartSaleUseCase implements UseCase<StartSaleCommand, EventResult> 
                 .orElseThrow(() -> new EventNotFoundException(
                         "Event " + command.eventId() + " not found"));
         command.actor().requireCanManage(event.getOrganizerId());
+        event.ensureCanStartSale();
 
         List<TicketType> ticketTypes = ticketTypeRepository.findAllByEventId(event.getId());
         for (TicketType ticketType : ticketTypes) {
