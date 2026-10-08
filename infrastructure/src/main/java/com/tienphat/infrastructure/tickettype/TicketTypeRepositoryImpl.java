@@ -5,6 +5,8 @@ import com.tienphat.domain.model.TicketType;
 import com.tienphat.domain.repository.TicketTypeRepository;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +37,12 @@ public class TicketTypeRepositoryImpl implements TicketTypeRepository {
     @Override
     public Optional<TicketType> findById(UUID id) {
         return jpaRepository.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<TicketType> findByIdForUpdate(UUID id) {
+        return jpaRepository.findByIdForUpdate(id).map(mapper::toDomain);
     }
 
     @Override

@@ -5,6 +5,7 @@ public enum ErrorType {
     VALIDATION,
     NOT_FOUND,
     CONFLICT,
+    SERVICE_UNAVAILABLE,
     UNAUTHORIZED,
     FORBIDDEN,
     INTERNAL

@@ -44,4 +44,26 @@ class AuthorizationContextTest {
         assertThatThrownBy(() -> actor.requireCanManage(UUID.randomUUID()))
                 .isInstanceOf(ForbiddenOperationException.class);
     }
+
+    @Test
+    @DisplayName("a user can access only their own order unless they are an ADMIN")
+    void requireCanAccess_enforcesOrderOwnership() {
+        UUID userId = UUID.randomUUID();
+        AuthorizationContext customer = new AuthorizationContext(userId, UserRole.CUSTOMER);
+
+        customer.requireCanAccess(userId);
+        assertThatThrownBy(() -> customer.requireCanAccess(UUID.randomUUID()))
+                .isInstanceOf(ForbiddenOperationException.class);
+
+        new AuthorizationContext(UUID.randomUUID(), UserRole.ADMIN)
+                .requireCanAccess(UUID.randomUUID());
+    }
+
+    @Test
+    @DisplayName("an incomplete authorization context is rejected as unauthenticated")
+    void requireAuthenticated_rejectsMissingIdentity() {
+        assertThatThrownBy(() -> new AuthorizationContext(null, UserRole.CUSTOMER)
+                .requireAuthenticated())
+                .isInstanceOf(ForbiddenOperationException.class);
+    }
 }

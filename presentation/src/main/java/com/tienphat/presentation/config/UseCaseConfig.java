@@ -14,8 +14,28 @@ import com.tienphat.application.event.EventMapper;
 import com.tienphat.application.event.EventResult;
 import com.tienphat.application.event.GetEventUseCase;
 import com.tienphat.application.event.ListEventsUseCase;
+import com.tienphat.application.event.StartSaleCommand;
+import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.event.UpdateEventUseCase;
+import com.tienphat.application.order.CreateOrderFromReservationCommand;
+import com.tienphat.application.order.CreateOrderFromReservationUseCase;
+import com.tienphat.application.order.ExpireOrderTransaction;
+import com.tienphat.application.order.ExpireOrderUseCase;
+import com.tienphat.application.order.GetOrderStatusCommand;
+import com.tienphat.application.order.GetOrderStatusUseCase;
+import com.tienphat.application.order.OrderStatusResult;
+import com.tienphat.application.payment.ConfirmPaymentUseCase;
+import com.tienphat.application.payment.InitiatePaymentUseCase;
+import com.tienphat.application.payment.PaymentConfirmationTransaction;
+import com.tienphat.application.payment.PaymentGatewayPort;
+import com.tienphat.application.payment.TicketCodeGenerator;
+import com.tienphat.application.payment.UuidTicketCodeGenerator;
+import com.tienphat.application.reservation.ReserveTicketCommand;
+import com.tienphat.application.reservation.ReserveTicketResult;
+import com.tienphat.application.reservation.ReserveTicketUseCase;
+import com.tienphat.application.reservation.ReservationRelayPort;
+import com.tienphat.application.reservation.RunReservationRelayUseCase;
 import com.tienphat.application.tickettype.CreateTicketTypeCommand;
 import com.tienphat.application.tickettype.CreateTicketTypeUseCase;
 import com.tienphat.application.tickettype.DeactivateTicketTypeCommand;
@@ -35,10 +55,18 @@ import com.tienphat.application.user.UserMapper;
 import com.tienphat.application.user.UserResult;
 import com.tienphat.application.usecase.UseCase;
 import com.tienphat.domain.repository.EventRepository;
+import com.tienphat.domain.repository.OrderRepository;
+import com.tienphat.domain.repository.OutboxEventRepository;
+import com.tienphat.domain.repository.PaymentRepository;
 import com.tienphat.domain.repository.PageRequest;
 import com.tienphat.domain.repository.PageResult;
+import com.tienphat.domain.repository.TicketRepository;
 import com.tienphat.domain.repository.TicketTypeRepository;
 import com.tienphat.domain.repository.UserRepository;
+import com.tienphat.domain.port.ReservationIntentStatusPort;
+import com.tienphat.domain.port.ReservationIntentStore;
+import com.tienphat.domain.port.StockCachePort;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -98,6 +126,25 @@ public class UseCaseConfig {
     }
 
     @Bean
+    public StartSaleUseCase startSaleUseCase(
+            EventRepository eventRepository,
+            TicketTypeRepository ticketTypeRepository,
+            StockCachePort stockCachePort,
+            EventMapper eventMapper) {
+        return new StartSaleUseCase(eventRepository, ticketTypeRepository, stockCachePort, eventMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "ticketing.messaging",
+            name = {"enabled", "relay-enabled"},
+            havingValue = "true",
+            matchIfMissing = true)
+    public RunReservationRelayUseCase runReservationRelayUseCase(ReservationRelayPort reservationRelayPort) {
+        return new RunReservationRelayUseCase(reservationRelayPort);
+    }
+
+    @Bean
     public UseCase<UpdateEventCommand, EventResult> updateEventUseCase(
             EventRepository eventRepository, EventMapper eventMapper) {
         return new UpdateEventUseCase(eventRepository, eventMapper);
@@ -151,5 +198,89 @@ public class UseCaseConfig {
             TicketTypeRepository ticketTypeRepository, EventRepository eventRepository,
             TicketTypeMapper ticketTypeMapper) {
         return new DeactivateTicketTypeUseCase(ticketTypeRepository, eventRepository, ticketTypeMapper);
+    }
+
+    @Bean
+    public UseCase<ReserveTicketCommand, ReserveTicketResult> reserveTicketUseCase(
+            EventRepository eventRepository,
+            TicketTypeRepository ticketTypeRepository,
+            StockCachePort stockCachePort) {
+        return new ReserveTicketUseCase(eventRepository, ticketTypeRepository, stockCachePort);
+    }
+
+    @Bean
+    public UseCase<GetOrderStatusCommand, OrderStatusResult> getOrderStatusUseCase(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            ReservationIntentStatusPort reservationIntentStatusPort) {
+        return new GetOrderStatusUseCase(orderRepository, paymentRepository, reservationIntentStatusPort);
+    }
+
+    @Bean
+    public CreateOrderFromReservationUseCase createOrderFromReservationUseCase(
+            OrderRepository orderRepository,
+            OutboxEventRepository outboxEventRepository,
+            InitiatePaymentUseCase initiatePaymentUseCase) {
+        return new CreateOrderFromReservationUseCase(
+                orderRepository, outboxEventRepository, initiatePaymentUseCase);
+    }
+
+    @Bean
+    public ExpireOrderTransaction expireOrderTransaction(
+            OrderRepository orderRepository,
+            OutboxEventRepository outboxEventRepository) {
+        return new ExpireOrderTransaction(orderRepository, outboxEventRepository);
+    }
+
+    @Bean
+    public ExpireOrderUseCase expireOrderUseCase(
+            ExpireOrderTransaction expireOrderTransaction,
+            ReservationIntentStore reservationIntentStore,
+            StockCachePort stockCachePort) {
+        return new ExpireOrderUseCase(
+                expireOrderTransaction,
+                reservationIntentStore,
+                stockCachePort);
+    }
+
+    @Bean
+    public TicketCodeGenerator ticketCodeGenerator() {
+        return new UuidTicketCodeGenerator();
+    }
+
+    @Bean
+    public InitiatePaymentUseCase initiatePaymentUseCase(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            PaymentGatewayPort paymentGatewayPort) {
+        return new InitiatePaymentUseCase(orderRepository, paymentRepository, paymentGatewayPort);
+    }
+
+    @Bean
+    public PaymentConfirmationTransaction paymentConfirmationTransaction(
+            PaymentRepository paymentRepository,
+            OrderRepository orderRepository,
+            TicketTypeRepository ticketTypeRepository,
+            TicketRepository ticketRepository,
+            OutboxEventRepository outboxEventRepository,
+            TicketCodeGenerator ticketCodeGenerator) {
+        return new PaymentConfirmationTransaction(
+                paymentRepository,
+                orderRepository,
+                ticketTypeRepository,
+                ticketRepository,
+                outboxEventRepository,
+                ticketCodeGenerator);
+    }
+
+    @Bean
+    public ConfirmPaymentUseCase confirmPaymentUseCase(
+            PaymentConfirmationTransaction paymentConfirmationTransaction,
+            ReservationIntentStore reservationIntentStore,
+            StockCachePort stockCachePort) {
+        return new ConfirmPaymentUseCase(
+                paymentConfirmationTransaction,
+                reservationIntentStore,
+                stockCachePort);
     }
 }

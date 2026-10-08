@@ -70,6 +70,39 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("create() accepts the pre-generated UUIDv7 used by the reservation flow")
+    void create_acceptsSuppliedUuidV7Id() {
+        UUID orderId = Order.generateId();
+
+        Order order = Order.create(orderId, "ORD-0002", USER_ID, EVENT_ID, HOLD_SEC);
+
+        assertThat(order.getId()).isEqualTo(orderId);
+        assertThat(order.getId().version()).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("create() rejects a supplied non-UUIDv7 order id")
+    void create_rejectsNonUuidV7Id() {
+        assertThatThrownBy(() -> Order.create(UUID.randomUUID(), "ORD-0002", USER_ID, EVENT_ID,
+                HOLD_SEC))
+                .isInstanceOf(InvalidOrderDataException.class)
+                .hasMessageContaining("UUIDv7");
+    }
+
+    @Test
+    @DisplayName("create() preserves the captured reservation timestamps")
+    void create_preservesCapturedTimestamps() {
+        UUID orderId = Order.generateId();
+        Instant reservedAt = Instant.parse("2026-05-01T09:00:00Z");
+        Instant expiresAt = Instant.parse("2026-05-01T09:05:00Z");
+
+        Order order = Order.create(orderId, "ORD-0003", USER_ID, EVENT_ID, reservedAt, expiresAt);
+
+        assertThat(order.getReservedAt()).isEqualTo(reservedAt);
+        assertThat(order.getExpiresAt()).isEqualTo(expiresAt);
+    }
+
+    @Test
     @DisplayName("create() sets expiresAt to reservedAt + holdDurationSec")
     void create_derivesExpiryFromHoldDuration() {
         Order order = aPendingOrder();

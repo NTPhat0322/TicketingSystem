@@ -21,5 +21,11 @@ public interface OrderRepository {
 
     Optional<Order> findById(UUID id);
 
+    /**
+     * Loads an order while holding a database row lock for the surrounding transaction.
+     * Expiry and payment confirmation use this boundary so only one terminal transition can win.
+     */
+    Optional<Order> findByIdForUpdate(UUID id);
+
     Optional<Order> findByOrderCode(String orderCode);
 }

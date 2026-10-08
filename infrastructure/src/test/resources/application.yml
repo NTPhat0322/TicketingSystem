@@ -3,3 +3,33 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+
+ticketing:
+  messaging:
+    enabled: false
+    relay-enabled: false
+    order-exchange: order.exchange
+    order-create-queue: order.create.queue
+    order-create-routing-key: order.create
+    order-expire-exchange: order.expire.exchange
+    order-hold-ttl-queue: order.hold.ttl.queue
+    order-hold-delay-routing-key: order.create.delay
+    order-expire-queue: order.expire.queue
+    order-expire-routing-key: order.expire
+    outbox-exchange: ticketing.events.exchange
+    outbox-order-created-queue: ticketing.events.order-created.queue
+    outbox-order-created-routing-key: order.created
+    outbox-order-expired-queue: ticketing.events.order-expired.queue
+    outbox-order-expired-routing-key: order.expired
+    outbox-payment-success-queue: ticketing.events.payment-success.queue
+    outbox-payment-success-routing-key: payment.success
+    outbox-publisher-enabled: false
+    outbox-publisher-interval: 1s
+    outbox-batch-size: 50
+    order-creation-grace-period: 1s
+    reconciliation-batch-size: 100

@@ -3,6 +3,8 @@ package com.tienphat.presentation.event;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
+import com.tienphat.application.event.StartSaleCommand;
+import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.usecase.UseCase;
 import com.tienphat.presentation.auth.JwtAuthorizationContext;
@@ -16,6 +18,7 @@ import com.tienphat.presentation.event.dto.UpdateEventRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -44,6 +47,7 @@ public class EventController {
     private final UseCase<UUID, EventResult> getEventUseCase;
     private final UseCase<PageRequest, PageResult<EventResult>> listEventsUseCase;
     private final UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase;
+    private final StartSaleUseCase startSaleUseCase;
     private final EventDtoMapper mapper;
 
     public EventController(
@@ -52,12 +56,14 @@ public class EventController {
             UseCase<UUID, EventResult> getEventUseCase,
             UseCase<PageRequest, PageResult<EventResult>> listEventsUseCase,
             UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase,
+            StartSaleUseCase startSaleUseCase,
             EventDtoMapper mapper) {
         this.createEventUseCase = createEventUseCase;
         this.updateEventUseCase = updateEventUseCase;
         this.getEventUseCase = getEventUseCase;
         this.listEventsUseCase = listEventsUseCase;
         this.deactivateEventUseCase = deactivateEventUseCase;
+        this.startSaleUseCase = startSaleUseCase;
         this.mapper = mapper;
     }
 
@@ -102,6 +108,16 @@ public class EventController {
     public EventResponse deactivate(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         EventResult result = deactivateEventUseCase.execute(
                 new DeactivateEventCommand(id, JwtAuthorizationContext.from(jwt)));
+        return mapper.toResponse(result);
+    }
+
+    @PostMapping("/{id}/start-sale")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    @Operation(summary = "Warm ticket inventory and start event sales")
+    public EventResponse startSale(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        EventResult result = startSaleUseCase.execute(
+                new StartSaleCommand(id, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 }

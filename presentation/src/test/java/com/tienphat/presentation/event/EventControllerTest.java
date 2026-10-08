@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
+import com.tienphat.application.event.StartSaleCommand;
+import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.usecase.UseCase;
 import com.tienphat.presentation.config.SecurityConfig;
@@ -76,6 +78,9 @@ class EventControllerTest {
 
     @MockitoBean
     private UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase;
+
+    @MockitoBean
+    private StartSaleUseCase startSaleUseCase;
 
     private static EventResult sampleResult(UUID id, EventStatus status) {
         return new EventResult(id, UUID.randomUUID(), "Concert", "A concert", "My Dinh Stadium",
@@ -369,6 +374,40 @@ class EventControllerTest {
             mockMvc.perform(post("/api/v1/events/{id}/deactivate", id)
                             .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/events/{id}/start-sale")
+    class StartSale {
+
+        @Test
+        @DisplayName("ADMIN/ORGANIZER -> 200 and passes the authenticated actor")
+        void organizerStartsSale() throws Exception {
+            UUID id = UUID.randomUUID();
+            EventResult result = sampleResult(id, EventStatus.ON_SALE);
+            when(startSaleUseCase.execute(any())).thenReturn(result);
+
+            mockMvc.perform(post("/api/v1/events/{id}/start-sale", id)
+                            .with(jwtFor("ORGANIZER")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ON_SALE"));
+
+            ArgumentCaptor<StartSaleCommand> captor = ArgumentCaptor.forClass(StartSaleCommand.class);
+            verify(startSaleUseCase).execute(captor.capture());
+            assertThat(captor.getValue().eventId()).isEqualTo(id);
+            assertThat(captor.getValue().actor().userId()).isEqualTo(ACTOR_ID);
+            assertThat(captor.getValue().actor().role()).isEqualTo(com.tienphat.domain.model.UserRole.ORGANIZER);
+        }
+
+        @Test
+        @DisplayName("CUSTOMER JWT -> 403, use-case never invoked")
+        void customerCannotStartSale() throws Exception {
+            mockMvc.perform(post("/api/v1/events/{id}/start-sale", UUID.randomUUID())
+                            .with(jwtFor("CUSTOMER")))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(startSaleUseCase);
         }
     }
 }
