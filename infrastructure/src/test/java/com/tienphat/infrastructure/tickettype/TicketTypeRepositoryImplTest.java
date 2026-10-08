@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +28,9 @@ class TicketTypeRepositoryImplTest extends AbstractPostgresIntegrationTest {
 
     @Autowired
     private TicketTypeRepositoryImpl ticketTypeRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private static TicketType newTicketType(UUID eventId) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
@@ -52,6 +57,19 @@ class TicketTypeRepositoryImplTest extends AbstractPostgresIntegrationTest {
         Optional<TicketType> found = ticketTypeRepository.findById(UUID.randomUUID());
 
         assertThat(found).isEmpty();
+    }
+
+    @Test
+    void findByIdForUpdateLoadsTheTicketTypeForInventoryTransition() {
+        TicketType ticketType = newTicketType(UUID.randomUUID());
+        ticketTypeRepository.save(ticketType);
+
+        Optional<TicketType> found = new TransactionTemplate(transactionManager)
+                .execute(status -> ticketTypeRepository.findByIdForUpdate(ticketType.getId()));
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getId()).isEqualTo(ticketType.getId());
+        assertThat(found.get().getSoldQuantity()).isEqualTo(ticketType.getSoldQuantity());
     }
 
     @Test
