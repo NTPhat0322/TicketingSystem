@@ -12,6 +12,8 @@ import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.DeactivateEventUseCase;
 import com.tienphat.application.event.EventMapper;
 import com.tienphat.application.event.EventResult;
+import com.tienphat.application.event.PublishEventCommand;
+import com.tienphat.application.event.PublishEventUseCase;
 import com.tienphat.application.event.GetEventUseCase;
 import com.tienphat.application.event.ListEventsUseCase;
 import com.tienphat.application.event.StartSaleCommand;
@@ -123,6 +125,12 @@ public class UseCaseConfig {
     public UseCase<CreateEventCommand, EventResult> createEventUseCase(
             EventRepository eventRepository, EventMapper eventMapper) {
         return new CreateEventUseCase(eventRepository, eventMapper);
+    }
+
+    @Bean
+    public UseCase<PublishEventCommand, EventResult> publishEventUseCase(
+            EventRepository eventRepository, EventMapper eventMapper) {
+        return new PublishEventUseCase(eventRepository, eventMapper);
     }
 
     @Bean

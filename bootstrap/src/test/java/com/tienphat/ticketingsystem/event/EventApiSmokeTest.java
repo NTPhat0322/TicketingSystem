@@ -42,7 +42,7 @@ class EventApiSmokeTest extends AbstractPostgresIntegrationTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
-    void fullEventLifecycle_createReadListUpdateDeactivate() throws Exception {
+    void fullEventLifecycle_createReadListUpdatePublishDeactivate() throws Exception {
         Map<String, Object> createBody = new LinkedHashMap<>();
         createBody.put("name", "Smoke Test Event");
         createBody.put("description", "e2e smoke test");
@@ -87,6 +87,11 @@ class EventApiSmokeTest extends AbstractPostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Smoke Test Event Updated"));
 
+        mockMvc.perform(post("/api/v1/events/{id}/publish", id)
+                        .with(organizerJwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
         mockMvc.perform(post("/api/v1/events/{id}/deactivate", id)
                         .with(organizerJwt()))
                 .andExpect(status().isOk())
@@ -97,7 +102,7 @@ class EventApiSmokeTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void organizerCannotUpdateAnotherOrganizersEvent_butAdminCan() throws Exception {
+    void organizerCannotUpdateOrPublishAnotherOrganizersEvent_butAdminCan() throws Exception {
         UUID otherOrganizerId = UUID.fromString("018f0f9e-0e39-7f31-9e13-ec7c1f160022");
         UUID adminId = UUID.fromString("018f0f9e-0e39-7f31-9e13-ec7c1f160023");
         String id = createEventAs(ORGANIZER_ID);
@@ -117,12 +122,21 @@ class EventApiSmokeTest extends AbstractPostgresIntegrationTest {
                         .content(objectMapper.writeValueAsString(updateBody)))
                 .andExpect(status().isForbidden());
 
+        mockMvc.perform(post("/api/v1/events/{id}/publish", id)
+                        .with(jwtFor(otherOrganizerId, "ORGANIZER")))
+                .andExpect(status().isForbidden());
+
         mockMvc.perform(put("/api/v1/events/{id}", id)
                         .with(jwtFor(adminId, "ADMIN"))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(updateBody)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Unauthorized Update"));
+
+        mockMvc.perform(post("/api/v1/events/{id}/publish", id)
+                        .with(jwtFor(adminId, "ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
     }
 
     private String createEventAs(UUID ownerId) throws Exception {

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${DB_HOST_PORT:-5432}:5432"
+      - "${DB_HOST_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,7 +19,7 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     ports:
-      - "${REDIS_HOST_PORT:-6379}:6379"
+      - "${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -28,14 +28,24 @@ services:
       timeout: 5s
       retries: 10
 
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "127.0.0.1:${REDISINSIGHT_HOST_PORT:-5540}:5540"
+    volumes:
+      - redisinsightdata:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
   rabbitmq:
     image: rabbitmq:4-management
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "${RABBITMQ_HOST_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "${RABBITMQ_HOST_PORT:-5673}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15673}:15672"
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
     healthcheck:
@@ -59,7 +69,7 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       MESSAGING_ENABLED: true
     ports:
-      - "${APP_HOST_PORT:-8080}:8080"
+      - "${APP_HOST_PORT:-8081}:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -68,7 +78,18 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  ui:
+    build:
+      context: ../TicketingSystemUI
+      dockerfile: Dockerfile
+    ports:
+      - "${UI_HOST_PORT:-8082}:80"
+    depends_on:
+      app:
+        condition: service_started
+
 volumes:
   pgdata:
   redisdata:
+  redisinsightdata:
   rabbitmqdata:
