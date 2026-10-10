@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
+import com.tienphat.application.event.PublishEventCommand;
 import com.tienphat.application.event.StartSaleCommand;
 import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
@@ -78,6 +79,9 @@ class EventControllerTest {
 
     @MockitoBean
     private UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase;
+
+    @MockitoBean
+    private UseCase<PublishEventCommand, EventResult> publishEventUseCase;
 
     @MockitoBean
     private StartSaleUseCase startSaleUseCase;
@@ -374,6 +378,39 @@ class EventControllerTest {
             mockMvc.perform(post("/api/v1/events/{id}/deactivate", id)
                             .with(jwtFor("ORGANIZER")))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/events/{id}/publish")
+    class Publish {
+
+        @Test
+        @DisplayName("ADMIN/ORGANIZER -> 200 and passes the authenticated actor")
+        void organizerPublishesEvent() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(publishEventUseCase.execute(any())).thenReturn(sampleResult(id, EventStatus.PUBLISHED));
+
+            mockMvc.perform(post("/api/v1/events/{id}/publish", id)
+                            .with(jwtFor("ORGANIZER")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
+            ArgumentCaptor<PublishEventCommand> captor = ArgumentCaptor.forClass(PublishEventCommand.class);
+            verify(publishEventUseCase).execute(captor.capture());
+            assertThat(captor.getValue().eventId()).isEqualTo(id);
+            assertThat(captor.getValue().actor().userId()).isEqualTo(ACTOR_ID);
+            assertThat(captor.getValue().actor().role()).isEqualTo(com.tienphat.domain.model.UserRole.ORGANIZER);
+        }
+
+        @Test
+        @DisplayName("CUSTOMER JWT -> 403, use-case never invoked")
+        void customerCannotPublishEvent() throws Exception {
+            mockMvc.perform(post("/api/v1/events/{id}/publish", UUID.randomUUID())
+                            .with(jwtFor("CUSTOMER")))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(publishEventUseCase);
         }
     }
 

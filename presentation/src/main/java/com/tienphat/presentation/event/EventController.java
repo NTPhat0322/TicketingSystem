@@ -3,6 +3,7 @@ package com.tienphat.presentation.event;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
+import com.tienphat.application.event.PublishEventCommand;
 import com.tienphat.application.event.StartSaleCommand;
 import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
@@ -47,6 +48,7 @@ public class EventController {
     private final UseCase<UUID, EventResult> getEventUseCase;
     private final UseCase<PageRequest, PageResult<EventResult>> listEventsUseCase;
     private final UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase;
+    private final UseCase<PublishEventCommand, EventResult> publishEventUseCase;
     private final StartSaleUseCase startSaleUseCase;
     private final EventDtoMapper mapper;
 
@@ -56,6 +58,7 @@ public class EventController {
             UseCase<UUID, EventResult> getEventUseCase,
             UseCase<PageRequest, PageResult<EventResult>> listEventsUseCase,
             UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase,
+            UseCase<PublishEventCommand, EventResult> publishEventUseCase,
             StartSaleUseCase startSaleUseCase,
             EventDtoMapper mapper) {
         this.createEventUseCase = createEventUseCase;
@@ -63,6 +66,7 @@ public class EventController {
         this.getEventUseCase = getEventUseCase;
         this.listEventsUseCase = listEventsUseCase;
         this.deactivateEventUseCase = deactivateEventUseCase;
+        this.publishEventUseCase = publishEventUseCase;
         this.startSaleUseCase = startSaleUseCase;
         this.mapper = mapper;
     }
@@ -108,6 +112,16 @@ public class EventController {
     public EventResponse deactivate(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         EventResult result = deactivateEventUseCase.execute(
                 new DeactivateEventCommand(id, JwtAuthorizationContext.from(jwt)));
+        return mapper.toResponse(result);
+    }
+
+    @PostMapping("/{id}/publish")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    @Operation(summary = "Publish a draft event")
+    public EventResponse publish(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        EventResult result = publishEventUseCase.execute(
+                new PublishEventCommand(id, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 

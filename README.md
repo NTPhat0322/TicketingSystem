@@ -69,6 +69,16 @@ The app reads its datasource from environment variables (see `bootstrap/src/main
 | `DB_USERNAME` | Database username          |
 | `DB_PASSWORD` | Database password          |
 
+### Run the backend and demo UI with Docker Compose
+
+The React demo UI is a sibling project at `../TicketingSystemUI`. Keep both folders under the same parent directory so Compose can use the UI as its build context. From the TicketingSystem directory, run:
+
+```powershell
+docker compose up -d --build
+```
+
+Open the UI at `http://localhost:8082`; API calls and Swagger (`/swagger-ui.html`) are proxied through the UI's origin. The backend is also exposed directly at `http://localhost:8081`. Host ports can be changed in `.env`; container-to-container ports remain unchanged. Use `docker compose down` to stop the stack without removing its data volumes.
+
 ### Build
 
 ```bash

@@ -7,7 +7,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
+  flyway:
+    # Adopt existing Hibernate-managed databases at version 0 so V1 can repair legacy schema.
+    baseline-on-migrate: true
+    baseline-version: 0
   data:
     redis:
       host: ${REDIS_HOST:localhost}
