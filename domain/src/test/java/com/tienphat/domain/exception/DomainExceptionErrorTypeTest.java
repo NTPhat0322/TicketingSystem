@@ -103,6 +103,12 @@ class DomainExceptionErrorTypeTest {
     }
 
     @Test
+    @DisplayName("InvalidOrderStateException maps to CONFLICT")
+    void invalidOrderState_mapsToConflict() {
+        assertThat(new InvalidOrderStateException("conflict").errorType()).isEqualTo(ErrorType.CONFLICT);
+    }
+
+    @Test
     @DisplayName("a DomainException subclass that does not override errorType() defaults to INTERNAL")
     void unmappedSubclass_defaultsToInternal() {
         DomainException unmapped = new DomainException("boom") {};

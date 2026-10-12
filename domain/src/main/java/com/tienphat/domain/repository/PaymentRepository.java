@@ -2,6 +2,8 @@ package com.tienphat.domain.repository;
 
 import com.tienphat.domain.model.Payment;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,4 +36,7 @@ public interface PaymentRepository {
 
     /** Loads a callback's payment while holding a database row lock. */
     Optional<Payment> findByTransactionRefForUpdate(String transactionRef);
+
+    /** Batch lookup for order history pages; orders without a payment attempt are simply absent. */
+    List<Payment> findAllByOrderIds(Collection<UUID> orderIds);
 }

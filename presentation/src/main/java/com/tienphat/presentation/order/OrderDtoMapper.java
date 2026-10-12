@@ -4,11 +4,14 @@ import com.tienphat.application.auth.AuthorizationContext;
 import com.tienphat.application.order.GetOrderStatusCommand;
 import com.tienphat.application.order.OrderStatusResult;
 import com.tienphat.application.reservation.ReserveTicketCommand;
+import com.tienphat.domain.repository.PageResult;
+import com.tienphat.presentation.dto.PageResponse;
 import com.tienphat.presentation.order.dto.OrderResponse;
 import com.tienphat.presentation.order.dto.ReserveOrderRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import java.util.List;
 import java.util.UUID;
 
 @Mapper(componentModel = "spring")
@@ -21,5 +24,11 @@ public interface OrderDtoMapper {
 
     default GetOrderStatusCommand toStatusCommand(UUID orderId, AuthorizationContext actor) {
         return new GetOrderStatusCommand(orderId, actor);
+    }
+
+    default PageResponse<OrderResponse> toPageResponse(PageResult<OrderStatusResult> pageResult) {
+        List<OrderResponse> content = pageResult.content().stream().map(this::toResponse).toList();
+        return new PageResponse<>(
+                content, pageResult.page(), pageResult.size(), pageResult.totalElements(), pageResult.totalPages());
     }
 }

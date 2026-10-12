@@ -9,4 +9,9 @@ public class InvalidOrderStateException extends DomainException {
     public InvalidOrderStateException(String message) {
         super(message);
     }
+
+    @Override
+    public ErrorType errorType() {
+        return ErrorType.CONFLICT;
+    }
 }

@@ -2,6 +2,7 @@ package com.tienphat.domain.repository;
 
 import com.tienphat.domain.model.TicketType;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,4 +26,7 @@ public interface TicketTypeRepository {
     Optional<TicketType> findByIdForUpdate(UUID id);
 
     List<TicketType> findAllByEventId(UUID eventId);
+
+    /** Batch lookup; unknown ids are skipped rather than reported. */
+    List<TicketType> findAllByIds(Collection<UUID> ids);
 }

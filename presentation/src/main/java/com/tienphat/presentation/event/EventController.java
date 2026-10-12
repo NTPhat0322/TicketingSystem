@@ -1,5 +1,6 @@
 package com.tienphat.presentation.event;
 
+import com.tienphat.application.event.CloseSaleCommand;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
@@ -50,6 +51,7 @@ public class EventController {
     private final UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase;
     private final UseCase<PublishEventCommand, EventResult> publishEventUseCase;
     private final StartSaleUseCase startSaleUseCase;
+    private final UseCase<CloseSaleCommand, EventResult> closeSaleUseCase;
     private final EventDtoMapper mapper;
 
     public EventController(
@@ -60,6 +62,7 @@ public class EventController {
             UseCase<DeactivateEventCommand, EventResult> deactivateEventUseCase,
             UseCase<PublishEventCommand, EventResult> publishEventUseCase,
             StartSaleUseCase startSaleUseCase,
+            UseCase<CloseSaleCommand, EventResult> closeSaleUseCase,
             EventDtoMapper mapper) {
         this.createEventUseCase = createEventUseCase;
         this.updateEventUseCase = updateEventUseCase;
@@ -68,6 +71,7 @@ public class EventController {
         this.deactivateEventUseCase = deactivateEventUseCase;
         this.publishEventUseCase = publishEventUseCase;
         this.startSaleUseCase = startSaleUseCase;
+        this.closeSaleUseCase = closeSaleUseCase;
         this.mapper = mapper;
     }
 
@@ -132,6 +136,16 @@ public class EventController {
     public EventResponse startSale(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         EventResult result = startSaleUseCase.execute(
                 new StartSaleCommand(id, JwtAuthorizationContext.from(jwt)));
+        return mapper.toResponse(result);
+    }
+
+    @PostMapping("/{id}/close-sale")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ORGANIZER')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME)
+    @Operation(summary = "Close ticket sales for an on-sale event")
+    public EventResponse closeSale(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        EventResult result = closeSaleUseCase.execute(
+                new CloseSaleCommand(id, JwtAuthorizationContext.from(jwt)));
         return mapper.toResponse(result);
     }
 }

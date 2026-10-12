@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,6 +86,19 @@ class PaymentRepositoryImplTest extends AbstractPostgresIntegrationTest {
         assertThat(locked)
                 .extracting(Payment::getId)
                 .isEqualTo(payment.getId());
+    }
+
+    @Test
+    void findAllByOrderIdsReturnsOnlyRequestedOrders() {
+        Payment first = paymentRepository.save(newPayment(UUID.randomUUID(), "txn-" + UUID.randomUUID()));
+        Payment second = paymentRepository.save(newPayment(UUID.randomUUID(), "txn-" + UUID.randomUUID()));
+        paymentRepository.save(newPayment(UUID.randomUUID(), "txn-" + UUID.randomUUID()));
+
+        List<Payment> found = paymentRepository.findAllByOrderIds(
+                List.of(first.getOrderId(), second.getOrderId(), UUID.randomUUID()));
+
+        assertThat(found).extracting(Payment::getId).containsExactlyInAnyOrder(first.getId(), second.getId());
+        assertThat(paymentRepository.findAllByOrderIds(List.of())).isEmpty();
     }
 
     private static Payment newPayment(UUID orderId, String transactionRef) {

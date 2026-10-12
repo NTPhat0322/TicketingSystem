@@ -28,4 +28,7 @@ public interface OrderRepository {
     Optional<Order> findByIdForUpdate(UUID id);
 
     Optional<Order> findByOrderCode(String orderCode);
+
+    /** A buyer's order history, newest first, with each order's lines attached. */
+    PageResult<Order> findAllByUserId(UUID userId, PageRequest pageRequest);
 }

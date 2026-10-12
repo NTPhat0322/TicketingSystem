@@ -2,7 +2,10 @@ package com.tienphat.infrastructure.order;
 
 import com.tienphat.domain.exception.InvalidOrderStateException;
 import com.tienphat.domain.model.Order;
+import com.tienphat.domain.model.OrderItem;
 import com.tienphat.domain.model.OrderStatus;
+import com.tienphat.domain.repository.PageRequest;
+import com.tienphat.domain.repository.PageResult;
 import com.tienphat.domain.vo.Money;
 import com.tienphat.infrastructure.AbstractPostgresIntegrationTest;
 import com.tienphat.infrastructure.InfrastructureTestApplication;
@@ -17,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -137,6 +141,44 @@ class OrderRepositoryImplTest extends AbstractPostgresIntegrationTest {
         assertThat(secondFailure.get()).isInstanceOf(InvalidOrderStateException.class);
         assertThat(orderRepository.findById(order.getId()).orElseThrow().getStatus())
                 .isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    void findAllByUserIdPagesNewestFirstWithItemsAndExcludesOtherUsers() {
+        UUID userId = UUID.randomUUID();
+        Instant base = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Order oldest = orderRepository.save(orderCreatedAt(userId, base));
+        Order middle = orderRepository.save(orderCreatedAt(userId, base.plusSeconds(60)));
+        Order newest = orderRepository.save(orderCreatedAt(userId, base.plusSeconds(120)));
+        orderRepository.save(orderCreatedAt(UUID.randomUUID(), base.plusSeconds(180)));
+
+        PageResult<Order> first = orderRepository.findAllByUserId(userId, new PageRequest(0, 2));
+        PageResult<Order> second = orderRepository.findAllByUserId(userId, new PageRequest(1, 2));
+
+        assertThat(first.totalElements()).isEqualTo(3);
+        assertThat(first.content()).extracting(Order::getId).containsExactly(newest.getId(), middle.getId());
+        assertThat(first.content()).allSatisfy(order -> assertThat(order.getItems()).hasSize(1));
+        assertThat(second.content()).extracting(Order::getId).containsExactly(oldest.getId());
+        assertThat(second.hasNext()).isFalse();
+    }
+
+    @Test
+    void findAllByUserIdReturnsEmptyPageForUserWithoutOrders() {
+        PageResult<Order> page = orderRepository.findAllByUserId(UUID.randomUUID(), new PageRequest(0, 20));
+
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+    }
+
+    private static Order orderCreatedAt(UUID userId, Instant createdAt) {
+        UUID orderId = Order.generateId();
+        Money unitPrice = Money.of(new BigDecimal("40.00"));
+        OrderItem item = OrderItem.reconstitute(
+                UUID.randomUUID(), orderId, UUID.randomUUID(), 2, unitPrice, unitPrice.multiply(2));
+        return Order.reconstitute(
+                orderId, "ORD-" + UUID.randomUUID(), userId, UUID.randomUUID(), OrderStatus.PENDING_PAYMENT,
+                item.getSubtotal(), List.of(item), createdAt, createdAt.plusSeconds(300), null,
+                createdAt, createdAt);
     }
 
     private static Order newOrder(String orderCode) {

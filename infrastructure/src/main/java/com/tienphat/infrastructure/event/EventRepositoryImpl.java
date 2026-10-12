@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,5 +50,13 @@ public class EventRepositoryImpl implements EventRepository {
                 pageRequest.page(),
                 pageRequest.size(),
                 page.getTotalElements());
+    }
+
+    @Override
+    public List<Event> findAllByIds(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findAllById(ids).stream().map(mapper::toDomain).toList();
     }
 }

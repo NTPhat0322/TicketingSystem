@@ -6,6 +6,8 @@ import com.tienphat.application.auth.LoginUseCase;
 import com.tienphat.application.auth.LogoutUseCase;
 import com.tienphat.application.auth.RefreshTokenStore;
 import com.tienphat.application.auth.RefreshUseCase;
+import com.tienphat.application.event.CloseSaleCommand;
+import com.tienphat.application.event.CloseSaleUseCase;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.CreateEventUseCase;
 import com.tienphat.application.event.DeactivateEventCommand;
@@ -20,12 +22,17 @@ import com.tienphat.application.event.StartSaleCommand;
 import com.tienphat.application.event.StartSaleUseCase;
 import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.event.UpdateEventUseCase;
+import com.tienphat.application.order.CancelOrderCommand;
+import com.tienphat.application.order.CancelOrderTransaction;
+import com.tienphat.application.order.CancelOrderUseCase;
 import com.tienphat.application.order.CreateOrderFromReservationCommand;
 import com.tienphat.application.order.CreateOrderFromReservationUseCase;
 import com.tienphat.application.order.ExpireOrderTransaction;
 import com.tienphat.application.order.ExpireOrderUseCase;
 import com.tienphat.application.order.GetOrderStatusCommand;
 import com.tienphat.application.order.GetOrderStatusUseCase;
+import com.tienphat.application.order.ListMyOrdersCommand;
+import com.tienphat.application.order.ListMyOrdersUseCase;
 import com.tienphat.application.order.OrderStatusResult;
 import com.tienphat.application.payment.ConfirmPaymentUseCase;
 import com.tienphat.application.payment.InitiatePaymentUseCase;
@@ -38,6 +45,11 @@ import com.tienphat.application.reservation.ReserveTicketResult;
 import com.tienphat.application.reservation.ReserveTicketUseCase;
 import com.tienphat.application.reservation.ReservationRelayPort;
 import com.tienphat.application.reservation.RunReservationRelayUseCase;
+import com.tienphat.application.ticket.GetOrderTicketsCommand;
+import com.tienphat.application.ticket.GetOrderTicketsUseCase;
+import com.tienphat.application.ticket.ListMyTicketsCommand;
+import com.tienphat.application.ticket.ListMyTicketsUseCase;
+import com.tienphat.application.ticket.TicketResult;
 import com.tienphat.application.tickettype.CreateTicketTypeCommand;
 import com.tienphat.application.tickettype.CreateTicketTypeUseCase;
 import com.tienphat.application.tickettype.DeactivateTicketTypeCommand;
@@ -134,6 +146,12 @@ public class UseCaseConfig {
     }
 
     @Bean
+    public UseCase<CloseSaleCommand, EventResult> closeSaleUseCase(
+            EventRepository eventRepository, EventMapper eventMapper) {
+        return new CloseSaleUseCase(eventRepository, eventMapper);
+    }
+
+    @Bean
     public StartSaleUseCase startSaleUseCase(
             EventRepository eventRepository,
             TicketTypeRepository ticketTypeRepository,
@@ -222,6 +240,45 @@ public class UseCaseConfig {
             PaymentRepository paymentRepository,
             ReservationIntentStatusPort reservationIntentStatusPort) {
         return new GetOrderStatusUseCase(orderRepository, paymentRepository, reservationIntentStatusPort);
+    }
+
+    @Bean
+    public CancelOrderTransaction cancelOrderTransaction(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository) {
+        return new CancelOrderTransaction(orderRepository, paymentRepository);
+    }
+
+    @Bean
+    public UseCase<CancelOrderCommand, OrderStatusResult> cancelOrderUseCase(
+            CancelOrderTransaction cancelOrderTransaction,
+            ReservationIntentStatusPort reservationIntentStatusPort,
+            StockCachePort stockCachePort) {
+        return new CancelOrderUseCase(cancelOrderTransaction, reservationIntentStatusPort, stockCachePort);
+    }
+
+    @Bean
+    public UseCase<ListMyOrdersCommand, PageResult<OrderStatusResult>> listMyOrdersUseCase(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository) {
+        return new ListMyOrdersUseCase(orderRepository, paymentRepository);
+    }
+
+    @Bean
+    public UseCase<GetOrderTicketsCommand, List<TicketResult>> getOrderTicketsUseCase(
+            OrderRepository orderRepository,
+            TicketRepository ticketRepository,
+            TicketTypeRepository ticketTypeRepository,
+            EventRepository eventRepository) {
+        return new GetOrderTicketsUseCase(orderRepository, ticketRepository, ticketTypeRepository, eventRepository);
+    }
+
+    @Bean
+    public UseCase<ListMyTicketsCommand, PageResult<TicketResult>> listMyTicketsUseCase(
+            TicketRepository ticketRepository,
+            TicketTypeRepository ticketTypeRepository,
+            EventRepository eventRepository) {
+        return new ListMyTicketsUseCase(ticketRepository, ticketTypeRepository, eventRepository);
     }
 
     @Bean

@@ -2,6 +2,8 @@ package com.tienphat.infrastructure.ticket;
 
 import com.tienphat.domain.model.Ticket;
 import com.tienphat.domain.model.TicketStatus;
+import com.tienphat.domain.repository.PageRequest;
+import com.tienphat.domain.repository.PageResult;
 import com.tienphat.infrastructure.AbstractPostgresIntegrationTest;
 import com.tienphat.infrastructure.InfrastructureTestApplication;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.util.List;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -83,6 +86,29 @@ class TicketRepositoryImplTest extends AbstractPostgresIntegrationTest {
         assertThat(locked)
                 .extracting(Ticket::getId)
                 .isEqualTo(ticket.getId());
+    }
+
+    @Test
+    void findAllByOwnerUserIdPagesMostRecentlyIssuedFirst() {
+        UUID ownerId = UUID.randomUUID();
+        Instant base = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Ticket oldest = ticketRepository.save(ticketIssuedAt(ownerId, base));
+        Ticket middle = ticketRepository.save(ticketIssuedAt(ownerId, base.plusSeconds(60)));
+        Ticket newest = ticketRepository.save(ticketIssuedAt(ownerId, base.plusSeconds(120)));
+        ticketRepository.save(ticketIssuedAt(UUID.randomUUID(), base.plusSeconds(180)));
+
+        PageResult<Ticket> first = ticketRepository.findAllByOwnerUserId(ownerId, new PageRequest(0, 2));
+        PageResult<Ticket> second = ticketRepository.findAllByOwnerUserId(ownerId, new PageRequest(1, 2));
+
+        assertThat(first.totalElements()).isEqualTo(3);
+        assertThat(first.content()).extracting(Ticket::getId).containsExactly(newest.getId(), middle.getId());
+        assertThat(second.content()).extracting(Ticket::getId).containsExactly(oldest.getId());
+    }
+
+    private static Ticket ticketIssuedAt(UUID ownerId, Instant issuedAt) {
+        return Ticket.reconstitute(
+                UUID.randomUUID(), "TKT-" + UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                ownerId, TicketStatus.ISSUED, issuedAt, null);
     }
 
     private static Ticket newTicket(String ticketCode) {

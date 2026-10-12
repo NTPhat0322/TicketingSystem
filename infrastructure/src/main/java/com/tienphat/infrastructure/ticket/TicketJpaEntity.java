@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -22,7 +23,11 @@ import java.util.UUID;
         name = "tickets",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_tickets_ticket_code",
-                columnNames = "ticket_code"))
+                columnNames = "ticket_code"),
+        indexes = {
+                @Index(name = "idx_tickets_owner_issued", columnList = "owner_user_id,issued_at"),
+                @Index(name = "idx_tickets_order_item", columnList = "order_item_id")
+        })
 @Getter
 @Setter
 @NoArgsConstructor

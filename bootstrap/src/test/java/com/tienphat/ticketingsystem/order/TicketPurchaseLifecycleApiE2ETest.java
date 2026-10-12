@@ -462,6 +462,156 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
                 "/paths/~1api~1v1~1events~1{id}~1start-sale/post/security"))).isTrue();
         assertThat(hasBearerRequirement(document.at(
                 "/paths/~1api~1v1~1admin~1reservations~1relay/post/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at("/paths/~1api~1v1~1orders/get/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at(
+                "/paths/~1api~1v1~1orders~1{orderId}~1tickets/get/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at(
+                "/paths/~1api~1v1~1orders~1{orderId}~1cancel/post/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at("/paths/~1api~1v1~1tickets/get/security"))).isTrue();
+        assertThat(hasBearerRequirement(document.at(
+                "/paths/~1api~1v1~1events~1{id}~1close-sale/post/security"))).isTrue();
+    }
+
+    @Test
+    void paidOrderAppearsInHistoryAndExposesItsTicketsOnlyToTheBuyer() throws Exception {
+        Fixture fixture = prepareSale(5, 10, 3600);
+        UUID orderId = reservePendingOrder(fixture, 2);
+        assertThat(payWithCallback(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(200);
+
+        mockMvc.perform(get("/api/v1/orders").with(jwtFor(fixture.userId(), "CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].orderId").value(orderId.toString()))
+                .andExpect(jsonPath("$.content[0].status").value("PAID"))
+                .andExpect(jsonPath("$.content[0].paymentStatus").value("SUCCESS"));
+        mockMvc.perform(get("/api/v1/orders/{orderId}/tickets", orderId)
+                        .with(jwtFor(fixture.userId(), "CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].status").value("ISSUED"))
+                .andExpect(jsonPath("$[0].ticketTypeName").value("Standard"))
+                .andExpect(jsonPath("$[0].eventName").value("Ticket purchase E2E " + fixture.eventId()))
+                .andExpect(jsonPath("$[0].venueName").value("Test venue"));
+        mockMvc.perform(get("/api/v1/tickets").with(jwtFor(fixture.userId(), "CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].eventId").value(fixture.eventId().toString()));
+
+        UUID stranger = UUID.randomUUID();
+        mockMvc.perform(get("/api/v1/orders/{orderId}/tickets", orderId).with(jwtFor(stranger, "CUSTOMER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/orders").with(jwtFor(stranger, "CUSTOMER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        assertThat(cancel(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(409);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
+    }
+
+    @Test
+    void buyerCancelRestoresStockOnceAndRejectsLatePayment() throws Exception {
+        Fixture fixture = prepareSale(5, 2, 3600);
+        UUID orderId = reservePendingOrder(fixture, 2);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            MvcResult cancelled = cancel(orderId, fixture.userId());
+            assertThat(cancelled.getResponse().getStatus()).isEqualTo(200);
+            assertThat(json(cancelled).path("status").asText()).isEqualTo("CANCELLED");
+            assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(5);
+        }
+        assertThat(reservationIntentStore.findByOrderId(orderId)).hasValueSatisfying(intent ->
+                assertThat(intent.state()).isEqualTo(ReservationIntentState.RELEASED));
+        assertThat(redisTemplate.opsForValue().get(
+                RedisReservationKeys.userLimit(fixture.ticketTypeId(), fixture.userId())))
+                .isEqualTo("0");
+        assertThat(paymentRepository.findByOrderId(orderId)).hasValueSatisfying(payment ->
+                assertThat(payment.getStatus().name()).isEqualTo("PENDING"));
+
+        assertThat(payWithCallback(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(409);
+        assertThat(ticketTypeRepository.findById(fixture.ticketTypeId()).orElseThrow().getSoldQuantity())
+                .isZero();
+        assertThat(reserve(fixture, fixture.userId(), 2).getResponse().getStatus()).isEqualTo(202);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
+    }
+
+    @Test
+    void cancelBeforeTheOrderExistsIsRejectedAndKeepsTheHold() throws Exception {
+        Fixture fixture = prepareSale(5, 10, 3600);
+        UUID orderId = UUID.fromString(json(reserve(fixture, fixture.userId(), 2)).path("orderId").asText());
+
+        assertThat(cancel(orderId, UUID.randomUUID()).getResponse().getStatus()).isEqualTo(403);
+        assertThat(cancel(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(409);
+        assertThat(cancel(UUID.randomUUID(), fixture.userId()).getResponse().getStatus()).isEqualTo(404);
+        mockMvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
+        assertThat(failureInjectingStockCachePort.releaseAttempts()).isZero();
+    }
+
+    @Test
+    void failedCancelReleaseIsRepairedByRetryingTheCancel() throws Exception {
+        Fixture fixture = prepareSale(5, 10, 3600);
+        UUID orderId = reservePendingOrder(fixture, 2);
+        failureInjectingStockCachePort.failNextRelease();
+
+        assertThat(cancel(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(500);
+        assertThat(orderRepository.findById(orderId)).hasValueSatisfying(order ->
+                assertThat(order.getStatus().name()).isEqualTo("CANCELLED"));
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
+
+        assertThat(cancel(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(200);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(5);
+        assertThat(failureInjectingStockCachePort.releaseAttempts()).isEqualTo(2);
+    }
+
+    @Test
+    void failedCancelReleaseIsRepairedWhenTheHoldExpires() throws Exception {
+        Fixture fixture = prepareSale(5, 10, 8);
+        UUID orderId = reservePendingOrder(fixture, 2);
+        failureInjectingStockCachePort.failNextRelease();
+
+        assertThat(cancel(orderId, fixture.userId()).getResponse().getStatus()).isEqualTo(500);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(3);
+
+        Awaitility.await().pollInterval(Duration.ofMillis(100)).atMost(Duration.ofSeconds(18))
+                .untilAsserted(() -> {
+                    assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(5);
+                    assertThat(failureInjectingStockCachePort.releaseAttempts()).isEqualTo(2);
+                });
+        assertThat(orderRepository.findById(orderId)).hasValueSatisfying(order ->
+                assertThat(order.getStatus().name()).isEqualTo("CANCELLED"));
+        assertThat(countOutbox(orderId, "ORDER_EXPIRED")).isZero();
+    }
+
+    @Test
+    void closeSaleEndpointEnforcesOwnershipStopsReservationsAndKeepsPendingOrdersPayable() throws Exception {
+        Fixture fixture = prepareSale(5, 10, 3600);
+        UUID pendingOrderId = reservePendingOrder(fixture, 1);
+
+        mockMvc.perform(post("/api/v1/events/{eventId}/close-sale", fixture.eventId())
+                        .with(jwtFor(UUID.randomUUID(), "ORGANIZER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/events/{eventId}/close-sale", fixture.eventId())
+                        .with(jwtFor(fixture.userId(), "CUSTOMER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/events/{eventId}/close-sale", fixture.eventId())
+                        .with(jwtFor(fixture.organizerId(), "ORGANIZER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+        assertThat(eventRepository.findById(fixture.eventId()).orElseThrow().getStatus())
+                .isEqualTo(EventStatus.CLOSED);
+
+        assertThat(reserve(fixture, fixture.userId(), 1).getResponse().getStatus()).isEqualTo(409);
+        assertThat(redisReservationAdapter.getAvailableStock(fixture.ticketTypeId())).isEqualTo(4);
+        mockMvc.perform(post("/api/v1/events/{eventId}/close-sale", fixture.eventId())
+                        .with(jwtFor(fixture.organizerId(), "ORGANIZER")))
+                .andExpect(status().isBadRequest());
+
+        assertThat(payWithCallback(pendingOrderId, fixture.userId()).getResponse().getStatus()).isEqualTo(200);
+        assertThat(ticketTypeRepository.findById(fixture.ticketTypeId()).orElseThrow().getSoldQuantity())
+                .isEqualTo(1);
     }
 
     private Fixture prepareSale(int stock, int maxPerUser, int holdDurationSec) throws Exception {
@@ -530,6 +680,34 @@ class TicketPurchaseLifecycleApiE2ETest extends AbstractPostgresIntegrationTest 
                         .with(jwtFor(userId, "CUSTOMER"))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(body)))
+                .andReturn();
+    }
+
+    private UUID reservePendingOrder(Fixture fixture, int quantity) throws Exception {
+        MvcResult reservation = reserve(fixture, fixture.userId(), quantity);
+        assertThat(reservation.getResponse().getStatus()).isEqualTo(202);
+        UUID orderId = UUID.fromString(json(reservation).path("orderId").asText());
+        assertThat(reservationIntentRelay.relayOnce()).isEqualTo(1);
+        awaitOrderStatus(orderId, fixture.userId(), "PENDING_PAYMENT");
+        return orderId;
+    }
+
+    private MvcResult payWithCallback(UUID orderId, UUID userId) throws Exception {
+        JsonNode order = json(mockMvc.perform(get("/api/v1/orders/{orderId}", orderId)
+                .with(jwtFor(userId, "CUSTOMER"))).andReturn());
+        return mockMvc.perform(post("/api/v1/payments/callback")
+                        .with(jwtFor(userId, "CUSTOMER"))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(callbackBody(
+                                order.path("paymentTransactionRef").asText(),
+                                order.path("totalAmount").decimalValue(),
+                                true))))
+                .andReturn();
+    }
+
+    private MvcResult cancel(UUID orderId, UUID userId) throws Exception {
+        return mockMvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .with(jwtFor(userId, "CUSTOMER")))
                 .andReturn();
     }
 

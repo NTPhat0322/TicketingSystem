@@ -1,6 +1,8 @@
 package com.tienphat.infrastructure.ticket;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -19,4 +21,6 @@ interface TicketJpaRepository extends JpaRepository<TicketJpaEntity, UUID> {
     Optional<TicketJpaEntity> findByTicketCodeForUpdate(@Param("ticketCode") String ticketCode);
 
     List<TicketJpaEntity> findAllByOrderItemId(UUID orderItemId);
+
+    Page<TicketJpaEntity> findAllByOwnerUserId(UUID ownerUserId, Pageable pageable);
 }
