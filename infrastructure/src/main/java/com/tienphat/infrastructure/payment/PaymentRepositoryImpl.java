@@ -6,6 +6,8 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -58,5 +60,13 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Payment> findByTransactionRefForUpdate(String transactionRef) {
         return jpaRepository.findByTransactionRefForUpdate(transactionRef).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<Payment> findAllByOrderIds(Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findAllByOrderIdIn(orderIds).stream().map(mapper::toDomain).toList();
     }
 }

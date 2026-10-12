@@ -53,6 +53,18 @@ class TicketTypeRepositoryImplTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void findAllByIdsSkipsUnknownIds() {
+        TicketType first = ticketTypeRepository.save(newTicketType(UUID.randomUUID()));
+        TicketType second = ticketTypeRepository.save(newTicketType(UUID.randomUUID()));
+
+        List<TicketType> found = ticketTypeRepository.findAllByIds(
+                List.of(first.getId(), second.getId(), UUID.randomUUID()));
+
+        assertThat(found).extracting(TicketType::getId).containsExactlyInAnyOrder(first.getId(), second.getId());
+        assertThat(ticketTypeRepository.findAllByIds(List.of())).isEmpty();
+    }
+
+    @Test
     void findByIdReturnsEmptyForUnknownId() {
         Optional<TicketType> found = ticketTypeRepository.findById(UUID.randomUUID());
 

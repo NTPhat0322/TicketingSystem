@@ -1,6 +1,7 @@
 package com.tienphat.presentation.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tienphat.application.event.CloseSaleCommand;
 import com.tienphat.application.event.CreateEventCommand;
 import com.tienphat.application.event.DeactivateEventCommand;
 import com.tienphat.application.event.EventResult;
@@ -11,6 +12,7 @@ import com.tienphat.application.event.UpdateEventCommand;
 import com.tienphat.application.usecase.UseCase;
 import com.tienphat.presentation.config.SecurityConfig;
 import com.tienphat.domain.exception.EventNotFoundException;
+import com.tienphat.domain.exception.ForbiddenOperationException;
 import com.tienphat.domain.exception.InvalidEventScheduleException;
 import com.tienphat.domain.exception.InvalidEventStateException;
 import com.tienphat.domain.model.EventStatus;
@@ -85,6 +87,9 @@ class EventControllerTest {
 
     @MockitoBean
     private StartSaleUseCase startSaleUseCase;
+
+    @MockitoBean
+    private UseCase<CloseSaleCommand, EventResult> closeSaleUseCase;
 
     private static EventResult sampleResult(UUID id, EventStatus status) {
         return new EventResult(id, UUID.randomUUID(), "Concert", "A concert", "My Dinh Stadium",
@@ -445,6 +450,78 @@ class EventControllerTest {
                     .andExpect(status().isForbidden());
 
             verifyNoInteractions(startSaleUseCase);
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/events/{id}/close-sale")
+    class CloseSale {
+
+        @Test
+        @DisplayName("ADMIN/ORGANIZER -> 200 CLOSED and passes the authenticated actor")
+        void organizerClosesSale() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(closeSaleUseCase.execute(any())).thenReturn(sampleResult(id, EventStatus.CLOSED));
+
+            mockMvc.perform(post("/api/v1/events/{id}/close-sale", id)
+                            .with(jwtFor("ORGANIZER")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CLOSED"));
+
+            ArgumentCaptor<CloseSaleCommand> captor = ArgumentCaptor.forClass(CloseSaleCommand.class);
+            verify(closeSaleUseCase).execute(captor.capture());
+            assertThat(captor.getValue().eventId()).isEqualTo(id);
+            assertThat(captor.getValue().actor().userId()).isEqualTo(ACTOR_ID);
+            assertThat(captor.getValue().actor().role()).isEqualTo(com.tienphat.domain.model.UserRole.ORGANIZER);
+        }
+
+        @Test
+        @DisplayName("CUSTOMER JWT -> 403, use-case never invoked")
+        void customerCannotCloseSale() throws Exception {
+            mockMvc.perform(post("/api/v1/events/{id}/close-sale", UUID.randomUUID())
+                            .with(jwtFor("CUSTOMER")))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(closeSaleUseCase);
+        }
+
+        @Test
+        @DisplayName("no JWT -> 401")
+        void anonymousCannotCloseSale() throws Exception {
+            mockMvc.perform(post("/api/v1/events/{id}/close-sale", UUID.randomUUID()))
+                    .andExpect(status().isUnauthorized());
+
+            verifyNoInteractions(closeSaleUseCase);
+        }
+
+        @Test
+        @DisplayName("foreign organizer -> 403")
+        void foreignOrganizer_returns403() throws Exception {
+            when(closeSaleUseCase.execute(any())).thenThrow(new ForbiddenOperationException("not owner"));
+
+            mockMvc.perform(post("/api/v1/events/{id}/close-sale", UUID.randomUUID())
+                            .with(jwtFor("ORGANIZER")))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("event not ON_SALE -> 400")
+        void invalidState_returns400() throws Exception {
+            when(closeSaleUseCase.execute(any())).thenThrow(new InvalidEventStateException("not on sale"));
+
+            mockMvc.perform(post("/api/v1/events/{id}/close-sale", UUID.randomUUID())
+                            .with(jwtFor("ORGANIZER")))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("unknown id -> 404")
+        void unknownId_returns404() throws Exception {
+            when(closeSaleUseCase.execute(any())).thenThrow(new EventNotFoundException("missing"));
+
+            mockMvc.perform(post("/api/v1/events/{id}/close-sale", UUID.randomUUID())
+                            .with(jwtFor("ORGANIZER")))
+                    .andExpect(status().isNotFound());
         }
     }
 }

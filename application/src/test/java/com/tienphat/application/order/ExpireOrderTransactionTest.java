@@ -7,6 +7,8 @@ import com.tienphat.domain.repository.OrderRepository;
 import com.tienphat.domain.repository.OutboxEventRepository;
 import com.tienphat.domain.vo.Money;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -66,6 +68,27 @@ class ExpireOrderTransactionTest {
 
         assertThat(result.outcome()).isEqualTo(ExpiryOutcome.PAID);
         assertThat(result.releaseReservation()).isNull();
+        verify(orderRepository, never()).save(any());
+        verify(outboxEventRepository, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = {"CANCELLED", "FAILED"})
+    void cancelledOrFailedOrderReturnsReleaseAsSafetyNet(OrderStatus status) {
+        Order order = order();
+        if (status == OrderStatus.CANCELLED) {
+            order.cancel();
+        } else {
+            order.fail();
+        }
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+
+        ExpireOrderResult result = transaction.execute(command());
+
+        assertThat(result.outcome()).isEqualTo(ExpiryOutcome.OTHER_TERMINAL);
+        assertThat(result.releaseReservation()).isEqualTo(
+                new ExpireOrderResult.ReleaseReservation(ORDER_ID, TICKET_TYPE_ID, USER_ID, 2));
+        assertThat(order.getStatus()).isEqualTo(status);
         verify(orderRepository, never()).save(any());
         verify(outboxEventRepository, never()).save(any());
     }

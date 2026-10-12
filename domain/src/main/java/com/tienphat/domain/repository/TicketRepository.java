@@ -22,4 +22,7 @@ public interface TicketRepository {
     Optional<Ticket> findByTicketCode(String ticketCode);
 
     List<Ticket> findAllByOrderItemId(UUID orderItemId);
+
+    /** A holder's tickets, most recently issued first. */
+    PageResult<Ticket> findAllByOwnerUserId(UUID ownerUserId, PageRequest pageRequest);
 }

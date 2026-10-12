@@ -8,6 +8,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
@@ -31,7 +32,8 @@ import java.util.UUID;
         name = "orders",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_orders_order_code",
-                columnNames = "order_code"))
+                columnNames = "order_code"),
+        indexes = @Index(name = "idx_orders_user_created", columnList = "user_id,created_at"))
 @Getter
 @Setter
 @NoArgsConstructor

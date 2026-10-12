@@ -70,6 +70,18 @@ class ExpireOrderUseCaseTest {
     }
 
     @Test
+    void otherTerminalOrderReleasesLeftoverHold() {
+        ExpireOrderResult transition = new ExpireOrderResult(ORDER_ID, ExpiryOutcome.OTHER_TERMINAL, release());
+        when(transaction.execute(any())).thenReturn(transition);
+
+        assertThat(useCase.execute(command())).isEqualTo(transition);
+
+        var order = inOrder(intentStore, stockCachePort);
+        order.verify(intentStore).markExpired(ORDER_ID);
+        order.verify(stockCachePort).release(ORDER_ID, TICKET_TYPE_ID, USER_ID, 2);
+    }
+
+    @Test
     void missingOrderUsesTheRetainedIntentForRelease() {
         ReservationIntent intent = new ReservationIntent(
                 ORDER_ID, USER_ID, EVENT_ID, TICKET_TYPE_ID, 2, UNIT_PRICE, 4, 300,

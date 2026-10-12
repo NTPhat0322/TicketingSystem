@@ -45,6 +45,17 @@ class EventRepositoryImplTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void findAllByIdsSkipsUnknownIds() {
+        Event first = eventRepository.save(newEvent(Instant.now()));
+        Event second = eventRepository.save(newEvent(Instant.now()));
+
+        List<Event> found = eventRepository.findAllByIds(List.of(first.getId(), second.getId(), UUID.randomUUID()));
+
+        assertThat(found).extracting(Event::getId).containsExactlyInAnyOrder(first.getId(), second.getId());
+        assertThat(eventRepository.findAllByIds(List.of())).isEmpty();
+    }
+
+    @Test
     void findByIdReturnsEmptyForUnknownId() {
         Optional<Event> found = eventRepository.findById(UUID.randomUUID());
 

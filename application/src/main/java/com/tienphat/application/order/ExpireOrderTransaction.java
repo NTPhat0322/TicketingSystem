@@ -56,7 +56,9 @@ public class ExpireOrderTransaction {
             case EXPIRED -> new ExpireOrderResult(
                     order.getId(), ExpiryOutcome.ALREADY_EXPIRED, releaseReservation(order));
             case PAID -> new ExpireOrderResult(order.getId(), ExpiryOutcome.PAID, null);
-            case CANCELLED, FAILED -> new ExpireOrderResult(order.getId(), ExpiryOutcome.OTHER_TERMINAL, null);
+            // Safety net: a cancel or payment-failure release may have failed after its commit.
+            case CANCELLED, FAILED -> new ExpireOrderResult(
+                    order.getId(), ExpiryOutcome.OTHER_TERMINAL, releaseReservation(order));
         };
     }
 
